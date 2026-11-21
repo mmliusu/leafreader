@@ -1,0 +1,22 @@
+# Xcode / 生成物
+build/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+LeafReader/Info.plist
+*.ipa
+Payload/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# macOS / Windows
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 编辑器
+.vscode/
+.idea/

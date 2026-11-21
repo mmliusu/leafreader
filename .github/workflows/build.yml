@@ -1,0 +1,88 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build unsigned IPA
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain info
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project LeafReader.xcodeproj \
+            -scheme LeafReader
+
+      - name: Build (Release, unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project LeafReader.xcodeproj \
+            -scheme LeafReader \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            -quiet 2>&1 | tee build.log
+
+      - name: Package unsigned IPA
+        run: |
+          APP_PATH=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::找不到 .app 产物"
+            exit 1
+          fi
+          echo "App bundle: $APP_PATH"
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry LeafReader-unsigned.ipa Payload
+          rm -rf Payload
+          ls -lh LeafReader-unsigned.ipa
+
+      - name: Summary
+        run: |
+          SIZE=$(du -h LeafReader-unsigned.ipa | cut -f1)
+          echo "### 构建成功 :white_check_mark:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 产物：\`LeafReader-unsigned.ipa\`（$SIZE）" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 下载后在 Windows 用 Sideloadly 个人签名安装" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: LeafReader-unsigned-ipa
+          path: LeafReader-unsigned.ipa
+          retention-days: 30
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          retention-days: 7
+          if-no-files-found: ignore

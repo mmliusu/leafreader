@@ -1,0 +1,221 @@
+import SwiftUI
+
+struct ReaderView: View {
+    @StateObject private var model: ReaderViewModel
+    @EnvironmentObject private var settings: ReadingSettings
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var showMenu = true
+    @State private var showTOC = false
+    @State private var showSettings = false
+
+    init(book: Book) {
+        _model = StateObject(wrappedValue: ReaderViewModel(book: book))
+    }
+
+    var body: some View {
+        ZStack {
+            settings.theme.backgroundColor.ignoresSafeArea()
+            readerContent
+            if showMenu {
+                menuOverlay
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.18), value: showMenu)
+        .statusBarHidden(!showMenu)
+        .onAppear {
+            LibraryStore.shared.markOpened(model.book.id)
+            model.load()
+        }
+        .onDisappear {
+            model.persistNow()
+        }
+        .sheet(isPresented: $showTOC) {
+            TocSheet(
+                sections: model.document?.sections ?? [],
+                currentIndex: model.sectionIndex
+            ) { index in
+                model.goToSection(index)
+                showTOC = false
+            }
+            .environmentObject(settings)
+        }
+        .sheet(isPresented: $showSettings) {
+            ReaderSettingsSheet()
+                .environmentObject(settings)
+        }
+    }
+
+    // MARK: - 内容
+
+    @ViewBuilder
+    private var readerContent: some View {
+        if model.isLoading {
+            ProgressView()
+                .tint(settings.theme.foregroundColor)
+        } else if let message = model.errorMessage {
+            VStack(spacing: 18) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 34))
+                Text(message)
+                    .font(.callout)
+                    .multilineTextAlignment(.center)
+                Button("返回书架") { dismiss() }
+                    .buttonStyle(.borderedProminent)
+            }
+            .padding(32)
+            .foregroundStyle(settings.theme.foregroundColor)
+        } else if model.book.format == .pdf {
+            PDFReaderView(
+                url: LibraryStore.shared.fileURL(for: model.book),
+                pageIndex: model.pdfPageIndex,
+                theme: settings.theme,
+                onPageChange: { index, count in
+                    model.updatePDFPage(index, count: count)
+                },
+                onTap: { toggleMenu() }
+            )
+            .ignoresSafeArea()
+        } else if let document = model.document,
+                  let section = document.sections[safe: model.sectionIndex] {
+            WebReaderView(
+                fileURL: section.url,
+                readAccessRoot: document.readAccessRoot,
+                css: ReaderStyle.css(settings: settings),
+                restoreRatio: model.sectionProgress,
+                resetPosition: model.sectionProgress < 0.001,
+                onProgress: { ratio in
+                    model.updateSectionProgress(ratio)
+                },
+                onTap: { toggleMenu() }
+            )
+            .ignoresSafeArea()
+        } else {
+            Text("没有可显示的内容")
+                .foregroundStyle(settings.theme.foregroundColor)
+        }
+    }
+
+    // MARK: - 菜单
+
+    private var menuOverlay: some View {
+        VStack(spacing: 0) {
+            topBar
+            Spacer(minLength: 0)
+            bottomBar
+        }
+    }
+
+    private var topBar: some View {
+        HStack(spacing: 18) {
+            Button {
+                model.persistNow()
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.body.weight(.semibold))
+            }
+
+            Spacer(minLength: 8)
+
+            VStack(spacing: 2) {
+                Text(model.book.title)
+                    .font(.headline)
+                    .lineLimit(1)
+                if let section = model.currentSection, model.book.format != .pdf {
+                    Text(section.title)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            Button {
+                showTOC = true
+            } label: {
+                Image(systemName: "list.bullet")
+            }
+            .disabled(model.book.format == .pdf || model.document == nil)
+        }
+        .font(.title3)
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+        .background(.ultraThinMaterial)
+    }
+
+    private var bottomBar: some View {
+        VStack(spacing: 14) {
+            if model.book.format == .pdf {
+                HStack {
+                    Text("第 \(model.pdfPageIndex + 1) / \(max(model.pdfPageCount, 1)) 页")
+                        .font(.footnote.monospacedDigit())
+                    Spacer()
+                    Text(model.progressText)
+                        .font(.footnote.monospacedDigit())
+                }
+            } else {
+                ProgressView(value: model.overallProgress)
+                HStack {
+                    Button {
+                        model.previousSection()
+                    } label: {
+                        Label("上一章", systemImage: "chevron.left")
+                    }
+                    .disabled(model.sectionIndex <= 0)
+
+                    Spacer()
+
+                    Text("\(model.sectionIndex + 1) / \(model.sectionCount) · \(Int((model.sectionProgress * 100).rounded()))%")
+                        .font(.footnote.monospacedDigit())
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Button {
+                        model.nextSection()
+                    } label: {
+                        Label("下一章", systemImage: "chevron.right")
+                    }
+                    .disabled(model.sectionIndex >= model.sectionCount - 1)
+                }
+                .font(.subheadline)
+            }
+
+            HStack(spacing: 30) {
+                Button {
+                    showSettings = true
+                } label: {
+                    Label("排版", systemImage: "textformat.size")
+                }
+                if model.book.format != .pdf {
+                    Button {
+                        showTOC = true
+                    } label: {
+                        Label("目录", systemImage: "list.bullet")
+                    }
+                }
+                Button {
+                    toggleMenu()
+                } label: {
+                    Label("沉浸", systemImage: "eye.slash")
+                }
+            }
+            .font(.subheadline)
+            .labelStyle(.titleAndIcon)
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, 16)
+        .padding(.bottom, 26)
+        .background(.ultraThinMaterial)
+    }
+
+    private func toggleMenu() {
+        withAnimation(.easeInOut(duration: 0.18)) {
+            showMenu.toggle()
+        }
+    }
+}
