@@ -3,7 +3,7 @@ import Foundation
 /// 注入到 WKWebView 里的阅读样式与脚本。
 enum ReaderStyle {
 
-    static func css(settings: ReadingSettings, pageMode: Bool) -> String {
+    static func css(settings: ReadingSettings, pageMode: Bool, customFontURL: URL?) -> String {
         let theme = settings.theme
         let fontSize = Int(settings.fontSize.rounded())
         let lineHeight = String(format: "%.2f", settings.lineHeight)
@@ -11,7 +11,19 @@ enum ReaderStyle {
         let color = theme.foregroundHex
         let background = theme.backgroundHex
 
-        let base = """
+        var fontFace = ""
+        if settings.font == .jinling, let url = customFontURL {
+            fontFace = """
+            @font-face {
+              font-family: 'LeafCustom';
+              src: url('\(url.absoluteString)') format('truetype');
+              font-weight: normal;
+              font-style: normal;
+            }
+            """
+        }
+
+        let base = fontFace + """
         html, body {
           background: \(background) !important;
           background-color: \(background) !important;

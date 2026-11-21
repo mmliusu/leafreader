@@ -59,7 +59,7 @@ struct ReaderView: View {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 34))
                 Text(message)
-                    .font(.callout)
+                    .font(AppFont.callout)
                     .multilineTextAlignment(.center)
                 Button("返回书架") { dismiss() }
                     .buttonStyle(.borderedProminent)
@@ -82,7 +82,11 @@ struct ReaderView: View {
             WebReaderView(
                 fileURL: section.url,
                 readAccessRoot: document.readAccessRoot,
-                css: ReaderStyle.css(settings: settings, pageMode: settings.pageMode),
+                css: ReaderStyle.css(
+                    settings: settings,
+                    pageMode: settings.pageMode,
+                    customFontURL: LibraryStore.shared.customFontURL
+                ),
                 pageMode: settings.pageMode,
                 restoreRatio: model.sectionProgress,
                 resetPosition: model.sectionProgress < 0.001,
@@ -125,18 +129,18 @@ struct ReaderView: View {
                 dismiss()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.body.weight(.semibold))
+                    .font(AppFont.body)
             }
 
             Spacer(minLength: 8)
 
             VStack(spacing: 2) {
                 Text(model.book.title)
-                    .font(.headline)
+                    .font(AppFont.headline)
                     .lineLimit(1)
                 if let section = model.currentSection, model.book.format != .pdf {
                     Text(section.title)
-                        .font(.caption2)
+                        .font(AppFont.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -151,7 +155,7 @@ struct ReaderView: View {
             }
             .disabled(model.book.format == .pdf || model.document == nil)
         }
-        .font(.title3)
+        .font(AppFont.title3)
         .padding(.horizontal, 20)
         .padding(.top, 8)
         .padding(.bottom, 10)
@@ -163,10 +167,10 @@ struct ReaderView: View {
             if model.book.format == .pdf {
                 HStack {
                     Text("第 \(model.pdfPageIndex + 1) / \(max(model.pdfPageCount, 1)) 页")
-                        .font(.footnote.monospacedDigit())
+                        .font(AppFont.footnote)
                     Spacer()
                     Text(model.progressText)
-                        .font(.footnote.monospacedDigit())
+                        .font(AppFont.footnote)
                 }
             } else {
                 ProgressView(value: model.overallProgress)
@@ -187,7 +191,7 @@ struct ReaderView: View {
                             Text("\(model.sectionIndex + 1) / \(model.sectionCount) · \(Int((model.sectionProgress * 100).rounded()))%")
                         }
                     }
-                    .font(.footnote.monospacedDigit())
+                    .font(AppFont.footnote)
                     .foregroundStyle(.secondary)
 
                     Spacer()
@@ -199,7 +203,7 @@ struct ReaderView: View {
                     }
                     .disabled(model.sectionIndex >= model.sectionCount - 1)
                 }
-                .font(.subheadline)
+                .font(AppFont.subheadline)
             }
 
             HStack(spacing: 30) {
@@ -221,7 +225,7 @@ struct ReaderView: View {
                     Label("沉浸", systemImage: "eye.slash")
                 }
             }
-            .font(.subheadline)
+            .font(AppFont.subheadline)
             .labelStyle(.titleAndIcon)
         }
         .padding(.horizontal, 22)

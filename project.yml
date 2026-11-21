@@ -63,6 +63,8 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         LSSupportsOpeningDocumentsInPlace: true
         UIFileSharingEnabled: true
+        UIAppFonts:
+          - FZXiJinLing.ttf
         ITSAppUsesNonExemptEncryption: false
         CFBundleDocumentTypes:
           - CFBundleTypeName: 文本文件

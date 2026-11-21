@@ -116,9 +116,9 @@ struct LibraryView: View {
                 .font(.system(size: 46, weight: .light))
                 .foregroundStyle(.secondary)
             Text("书架还是空的")
-                .font(.headline)
+                .font(AppFont.headline)
             Text("导入 TXT、EPUB 或 PDF 开始阅读")
-                .font(.footnote)
+                .font(AppFont.footnote)
                 .foregroundStyle(.secondary)
             Button {
                 showImporter = true

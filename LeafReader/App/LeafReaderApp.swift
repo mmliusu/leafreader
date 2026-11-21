@@ -11,6 +11,7 @@ struct LeafReaderApp: App {
             LibraryView()
                 .environmentObject(library)
                 .environmentObject(settings)
+                .environment(\.font, AppFont.body)
         }
     }
 }

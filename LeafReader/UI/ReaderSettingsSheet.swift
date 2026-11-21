@@ -83,7 +83,7 @@ struct ReaderSettingsSheet: View {
                         .opacity(settings.theme == theme ? 1 : 0)
                 }
                 Text(theme.name)
-                    .font(.caption2)
+                    .font(AppFont.caption2)
                     .foregroundStyle(settings.theme == theme ? Color.accentColor : Color.secondary)
             }
             .frame(maxWidth: .infinity)

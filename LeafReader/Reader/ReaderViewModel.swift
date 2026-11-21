@@ -73,7 +73,12 @@ final class ReaderViewModel: ObservableObject {
 
         DispatchQueue.global(qos: .userInitiated).async {
             do {
-                let document = try BookLoader.load(book: book, fileURL: fileURL, workDirectory: workDirectory)
+                let document = try BookLoader.load(
+                    book: book,
+                    fileURL: fileURL,
+                    workDirectory: workDirectory,
+                    readAccessRoot: LibraryStore.shared.rootURL
+                )
                 DispatchQueue.main.async {
                     self.apply(document)
                 }

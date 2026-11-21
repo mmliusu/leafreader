@@ -8,12 +8,14 @@ final class LibraryStore: ObservableObject {
     @Published private(set) var books: [Book] = []
     @Published var lastError: String?
 
+    let rootURL: URL
     let booksURL: URL
-    private let rootURL: URL
     private let indexURL: URL
     private let fm = FileManager.default
     private var lastIncomingKey: String?
     private var lastIncomingDate = Date.distantPast
+    /// 打包在 App 里的自定义字体，首次启动复制到 Application Support，供 WKWebView 用 file:// 引用。
+    private(set) var customFontURL: URL?
 
     private init() {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -21,6 +23,16 @@ final class LibraryStore: ObservableObject {
         booksURL = rootURL.appendingPathComponent("Books", isDirectory: true)
         indexURL = rootURL.appendingPathComponent("library.json")
         try? FileManager.default.createDirectory(at: booksURL, withIntermediateDirectories: true)
+
+        let fontsDirectory = rootURL.appendingPathComponent("Fonts", isDirectory: true)
+        try? FileManager.default.createDirectory(at: fontsDirectory, withIntermediateDirectories: true)
+        let fontDestination = fontsDirectory.appendingPathComponent("FZXiJinLing.ttf")
+        if !FileManager.default.fileExists(atPath: fontDestination.path),
+           let source = Bundle.main.url(forResource: "FZXiJinLing", withExtension: "ttf") {
+            try? FileManager.default.copyItem(at: source, to: fontDestination)
+        }
+        customFontURL = FileManager.default.fileExists(atPath: fontDestination.path) ? fontDestination : nil
+
         loadIndex()
         pruneMissing()
     }

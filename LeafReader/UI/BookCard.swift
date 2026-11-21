@@ -10,18 +10,18 @@ struct BookCard: View {
         VStack(alignment: .leading, spacing: 6) {
             coverView
             Text(book.title)
-                .font(.footnote.weight(.medium))
+                .font(AppFont.footnote)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 4) {
                 Text(book.displayAuthor)
-                    .font(.caption2)
+                    .font(AppFont.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer(minLength: 2)
                 Text(book.progressText)
-                    .font(.caption2.monospacedDigit())
+                    .font(AppFont.caption2)
                     .foregroundStyle(.secondary)
             }
         }
@@ -49,7 +49,7 @@ struct BookCard: View {
                     Image(systemName: book.format.symbolName)
                         .font(.system(size: 24, weight: .light))
                     Text(book.format.displayName)
-                        .font(.caption2.weight(.semibold))
+                        .font(AppFont.caption2)
                 }
                 .foregroundStyle(.white.opacity(0.92))
             }

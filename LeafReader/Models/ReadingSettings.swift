@@ -52,6 +52,7 @@ enum ReaderTheme: String, CaseIterable, Identifiable, Codable {
 }
 
 enum ReaderFont: String, CaseIterable, Identifiable {
+    case jinling
     case system
     case songti
     case kaiti
@@ -61,6 +62,7 @@ enum ReaderFont: String, CaseIterable, Identifiable {
 
     var name: String {
         switch self {
+        case .jinling: return "金陵"
         case .system: return "系统"
         case .songti: return "宋体"
         case .kaiti: return "楷体"
@@ -70,6 +72,7 @@ enum ReaderFont: String, CaseIterable, Identifiable {
 
     var cssFamily: String {
         switch self {
+        case .jinling: return "\"LeafCustom\", \"FangSong\", \"STFangsong\", serif"
         case .system: return "-apple-system, \"PingFang SC\", \"Helvetica Neue\", sans-serif"
         case .songti: return "\"Songti SC\", \"STSong\", \"SimSun\", serif"
         case .kaiti: return "\"Kaiti SC\", \"STKaiti\", \"KaiTi\", serif"
@@ -132,7 +135,7 @@ final class ReadingSettings: ObservableObject {
         if let raw = defaults.string(forKey: Keys.font), let value = ReaderFont(rawValue: raw) {
             font = value
         } else {
-            font = .system
+            font = .jinling
         }
 
         if defaults.object(forKey: Keys.pageMode) == nil {

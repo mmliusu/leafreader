@@ -50,6 +50,14 @@ Application Support/LeafReader/
   Books/<UUID>/epub/         # EPUB 解压目录
 ```
 
+## 内置字体
+
+`LeafReader/Resources/FZXiJinLing.ttf`（方正细金陵简体）随 App 打包，界面与正文都用它：
+
+- 界面：`Info.plist` 的 `UIAppFonts` 注册，`AppFont` 统一字号体系（`FZXIJINLJW--GB1-0`）
+- 正文：启动时复制到 `Application Support/LeafReader/Fonts/`，WKWebView 用 `@font-face` + `file://` 引用；因此 `readAccessRoot` 设在应用数据根目录，字体和书籍都能被加载
+- 换字体：把同名 ttf 放进 `LeafReader/Resources/`，改 `AppFont.postScriptName`、`UIAppFonts` 文件名，以及 `ReaderFont.jinling` 的 CSS family
+
 ## 构建
 
 推送到 `main` 或手动触发 **Build** workflow，约 3–6 分钟后在运行页面的 Artifacts 里下载：
@@ -82,6 +90,7 @@ Windows 上用 Sideloadly 选择 `LeafReader-unsigned.ipa`，用自己的 Apple 
 - [x] 排版设置：字号、行距、边距、字体、四套背景主题
 - [x] 点击正文切换沉浸模式
 - [x] 删除书籍、标记未读
+- [x] 全局自定义字体（界面 + 正文），字体可在排版里切换回系统/宋体/楷体/黑体
 
 ## 后续可做
 

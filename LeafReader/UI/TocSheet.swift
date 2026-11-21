@@ -12,7 +12,7 @@ struct TocSheet: View {
             Group {
                 if sections.isEmpty {
                     Text("没有可用的目录")
-                        .font(.footnote)
+                        .font(AppFont.footnote)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
