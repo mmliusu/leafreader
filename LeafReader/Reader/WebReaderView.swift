@@ -25,7 +25,7 @@ struct WebReaderView: UIViewRepresentable {
         configuration.userContentController.addUserScript(
             WKUserScript(source: ReaderStyle.bootstrapJS, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
         )
-        for name in ["progress", "pages", "chapter", "ready", "tap"] {
+        for name in ["progress", "pages", "chapter", "ready", "tap", "page"] {
             configuration.userContentController.add(context.coordinator, name: name)
         }
 
@@ -39,6 +39,7 @@ struct WebReaderView: UIViewRepresentable {
         webView.scrollView.showsVerticalScrollIndicator = false
         webView.scrollView.showsHorizontalScrollIndicator = false
         webView.scrollView.alwaysBounceVertical = false
+        context.coordinator.webView = webView
         webView.scrollView.isPagingEnabled = pageMode
         return webView
     }
@@ -70,13 +71,14 @@ struct WebReaderView: UIViewRepresentable {
         webView.stopLoading()
         webView.navigationDelegate = nil
         let controller = webView.configuration.userContentController
-        for name in ["progress", "pages", "chapter", "ready", "tap"] {
+        for name in ["progress", "pages", "chapter", "ready", "tap", "page"] {
             controller.removeScriptMessageHandler(forName: name)
         }
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var parent: WebReaderView
+        weak var webView: WKWebView?
         var loadedKey: String = ""
         var appliedSignature: String = ""
         var latestRatio: Double = 0
@@ -141,6 +143,11 @@ struct WebReaderView: UIViewRepresentable {
                     parent.onChapterChange(1)
                 } else if raw == "prev" {
                     parent.onChapterChange(-1)
+                }
+            case "page":
+                let delta = (message.body as? NSNumber)?.intValue ?? 0
+                if delta != 0 {
+                    webView?.evaluateJavaScript("window.__leaf && window.__leaf.goPage(\(delta));", completionHandler: nil)
                 }
             case "tap":
                 parent.onTap()

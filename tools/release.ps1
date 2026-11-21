@@ -21,7 +21,9 @@ Write-Host "==> 提交变更" -ForegroundColor Cyan
 git -C $root add -A
 git -C $root diff --cached --quiet
 if ($LASTEXITCODE -ne 0) {
-    git -C $root commit -m $Message
+    $msgFile = Join-Path $env:TEMP 'leafreader-commit-msg.txt'
+    [IO.File]::WriteAllText($msgFile, $Message, [System.Text.UTF8Encoding]::new($false))
+    git -C $root commit -F $msgFile
 } else {
     Write-Host "（没有新的变更）"
 }

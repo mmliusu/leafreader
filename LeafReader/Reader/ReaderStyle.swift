@@ -59,7 +59,7 @@ enum ReaderStyle {
               column-width: 100vw !important;
               column-gap: 0 !important;
               column-fill: auto !important;
-              overflow: hidden !important;
+              overflow: visible !important;
             }
             body > * {
               padding-left: \(margin)px !important;
@@ -265,6 +265,12 @@ enum ReaderStyle {
         if (target && typeof target.closest === 'function' && target.closest('a')) { return; }
         var selection = window.getSelection ? String(window.getSelection()) : '';
         if (selection.length > 0) { return; }
+        if (mode === 'page') {
+          var width = window.innerWidth || 1;
+          var x = event.clientX / width;
+          if (x < 0.22) { send('page', -1); return; }
+          if (x > 0.78) { send('page', 1); return; }
+        }
         send('tap', true);
       }, false);
 
@@ -276,6 +282,18 @@ enum ReaderStyle {
             return total > 1 ? currentPage() / (total - 1) : 0;
           }
           return Math.min(1, Math.max(0, docScrollTop() / maxScrollTop()));
+        },
+        goPage: function (delta) {
+          if (mode !== 'page' || !delta) { return; }
+          var total = totalPages();
+          var current = currentPage();
+          var target = Math.min(total - 1, Math.max(0, current + delta));
+          if (target === current) {
+            if (delta > 0) { send('chapter', 'next'); }
+            else { send('chapter', 'prev'); }
+            return;
+          }
+          window.scrollTo({ left: target * pageStep(), top: 0, behavior: 'smooth' });
         }
       };
     })();
