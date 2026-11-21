@@ -9,6 +9,8 @@ final class ReaderViewModel: ObservableObject {
     @Published var sectionProgress: Double
     @Published var pdfPageIndex: Int
     @Published var pdfPageCount: Int
+    @Published var pageIndex: Int = 0
+    @Published var pageCount: Int = 0
     @Published var isLoading = true
     @Published var errorMessage: String?
 
@@ -92,8 +94,15 @@ final class ReaderViewModel: ObservableObject {
             }
             if sectionIndex < 0 { sectionIndex = 0 }
         }
+        pageIndex = 0
+        pageCount = 0
         isLoading = false
         persistNow()
+    }
+
+    func updatePages(current: Int, total: Int) {
+        if pageCount != total { pageCount = total }
+        if pageIndex != current { pageIndex = current }
     }
 
     // MARK: - 进度
@@ -119,6 +128,8 @@ final class ReaderViewModel: ObservableObject {
         guard index != sectionIndex else { return false }
         sectionIndex = index
         sectionProgress = 0
+        pageIndex = 0
+        pageCount = 0
         persistNow()
         return true
     }

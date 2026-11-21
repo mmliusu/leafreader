@@ -29,6 +29,14 @@ struct ReaderSettingsSheet: View {
                     Text("左右边距（\(Int(settings.margin))）")
                 }
 
+                Section("阅读方式") {
+                    Picker("阅读方式", selection: $settings.pageMode) {
+                        Text("左右翻页").tag(true)
+                        Text("上下滚动").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
                 Section("字体") {
                     Picker("字体", selection: $settings.font) {
                         ForEach(ReaderFont.allCases) { font in

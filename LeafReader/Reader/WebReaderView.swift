@@ -6,9 +6,12 @@ struct WebReaderView: UIViewRepresentable {
     let fileURL: URL
     let readAccessRoot: URL
     let css: String
+    let pageMode: Bool
     let restoreRatio: Double
     let resetPosition: Bool
     let onProgress: (Double) -> Void
+    let onPages: (Int, Int) -> Void
+    let onChapterChange: (Int) -> Void
     let onTap: () -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -17,14 +20,14 @@ struct WebReaderView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .nonPersistent()
         configuration.allowsInlineMediaPlayback = true
+        configuration.defaultWebpagePreferences.preferredContentMode = .mobile
         configuration.userContentController.addUserScript(
             WKUserScript(source: ReaderStyle.bootstrapJS, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
         )
-        configuration.userContentController.add(context.coordinator, name: "progress")
-        configuration.userContentController.add(context.coordinator, name: "ready")
-        configuration.userContentController.add(context.coordinator, name: "tap")
+        for name in ["progress", "pages", "chapter", "ready", "tap"] {
+            configuration.userContentController.add(context.coordinator, name: name)
+        }
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
@@ -34,6 +37,9 @@ struct WebReaderView: UIViewRepresentable {
         webView.scrollView.backgroundColor = .clear
         webView.allowsBackForwardNavigationGestures = false
         webView.scrollView.showsVerticalScrollIndicator = false
+        webView.scrollView.showsHorizontalScrollIndicator = false
+        webView.scrollView.alwaysBounceVertical = false
+        webView.scrollView.isPagingEnabled = pageMode
         return webView
     }
 
@@ -41,16 +47,21 @@ struct WebReaderView: UIViewRepresentable {
         let coordinator = context.coordinator
         coordinator.parent = self
 
+        if webView.scrollView.isPagingEnabled != pageMode {
+            webView.scrollView.isPagingEnabled = pageMode
+        }
+
         let key = fileURL.path
         if coordinator.loadedKey != key {
             coordinator.loadedKey = key
             coordinator.latestRatio = restoreRatio
-            coordinator.appliedCSS = ""
+            coordinator.appliedSignature = ""
             webView.loadFileURL(fileURL, allowingReadAccessTo: readAccessRoot)
             return
         }
 
-        if coordinator.appliedCSS != css {
+        let signature = css + "|" + (pageMode ? "page" : "scroll")
+        if coordinator.appliedSignature != signature {
             coordinator.applyConfig(on: webView, restore: coordinator.latestRatio, reset: false)
         }
     }
@@ -59,15 +70,15 @@ struct WebReaderView: UIViewRepresentable {
         webView.stopLoading()
         webView.navigationDelegate = nil
         let controller = webView.configuration.userContentController
-        controller.removeScriptMessageHandler(forName: "progress")
-        controller.removeScriptMessageHandler(forName: "ready")
-        controller.removeScriptMessageHandler(forName: "tap")
+        for name in ["progress", "pages", "chapter", "ready", "tap"] {
+            controller.removeScriptMessageHandler(forName: name)
+        }
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var parent: WebReaderView
         var loadedKey: String = ""
-        var appliedCSS: String = ""
+        var appliedSignature: String = ""
         var latestRatio: Double = 0
 
         init(_ parent: WebReaderView) {
@@ -76,13 +87,19 @@ struct WebReaderView: UIViewRepresentable {
         }
 
         func applyConfig(on webView: WKWebView, restore: Double, reset: Bool) {
-            appliedCSS = parent.css
-            let json = ReaderStyle.configJSON(css: parent.css, restore: restore, reset: reset)
+            appliedSignature = parent.css + "|" + (parent.pageMode ? "page" : "scroll")
+            let json = ReaderStyle.configJSON(
+                css: parent.css,
+                mode: parent.pageMode ? "page" : "scroll",
+                restore: restore,
+                reset: reset
+            )
             webView.evaluateJavaScript("window.__leaf && window.__leaf.applyConfig(\(json));", completionHandler: nil)
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             latestRatio = parent.restoreRatio
+            webView.scrollView.isPagingEnabled = parent.pageMode
             applyConfig(on: webView, restore: parent.restoreRatio, reset: parent.resetPosition)
         }
 
@@ -95,7 +112,6 @@ struct WebReaderView: UIViewRepresentable {
                 decisionHandler(.allow)
                 return
             }
-
             if navigationAction.navigationType == .linkActivated,
                !url.isFileURL,
                let scheme = url.scheme?.lowercased(),
@@ -110,21 +126,34 @@ struct WebReaderView: UIViewRepresentable {
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             switch message.name {
             case "progress", "ready":
-                var value: Double?
-                if let number = message.body as? NSNumber {
-                    value = number.doubleValue
-                } else if let double = message.body as? Double {
-                    value = double
-                }
-                if let ratio = value {
+                if let ratio = number(from: message.body) {
                     latestRatio = ratio
                     parent.onProgress(ratio)
+                }
+            case "pages":
+                guard let dict = message.body as? [String: Any] else { return }
+                let current = (dict["current"] as? NSNumber)?.intValue ?? (dict["current"] as? Int) ?? 0
+                let total = (dict["total"] as? NSNumber)?.intValue ?? (dict["total"] as? Int) ?? 1
+                parent.onPages(current, total)
+            case "chapter":
+                guard let raw = message.body as? String else { return }
+                if raw == "next" {
+                    parent.onChapterChange(1)
+                } else if raw == "prev" {
+                    parent.onChapterChange(-1)
                 }
             case "tap":
                 parent.onTap()
             default:
                 break
             }
+        }
+
+        private func number(from body: Any) -> Double? {
+            if let value = body as? NSNumber { return value.doubleValue }
+            if let value = body as? Double { return value }
+            if let value = body as? Int { return Double(value) }
+            return nil
         }
     }
 }

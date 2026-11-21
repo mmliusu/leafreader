@@ -99,6 +99,10 @@ final class ReadingSettings: ObservableObject {
     @Published var font: ReaderFont {
         didSet { defaults.set(font.rawValue, forKey: Keys.font) }
     }
+    /// true = 横向分页翻页；false = 纵向滚动
+    @Published var pageMode: Bool {
+        didSet { defaults.set(pageMode, forKey: Keys.pageMode) }
+    }
 
     private enum Keys {
         static let fontSize = "reader.fontSize"
@@ -106,6 +110,7 @@ final class ReadingSettings: ObservableObject {
         static let margin = "reader.margin"
         static let theme = "reader.theme"
         static let font = "reader.font"
+        static let pageMode = "reader.pageMode"
     }
 
     private init() {
@@ -128,6 +133,12 @@ final class ReadingSettings: ObservableObject {
             font = value
         } else {
             font = .system
+        }
+
+        if defaults.object(forKey: Keys.pageMode) == nil {
+            pageMode = true
+        } else {
+            pageMode = defaults.bool(forKey: Keys.pageMode)
         }
     }
 }

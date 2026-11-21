@@ -82,11 +82,22 @@ struct ReaderView: View {
             WebReaderView(
                 fileURL: section.url,
                 readAccessRoot: document.readAccessRoot,
-                css: ReaderStyle.css(settings: settings),
+                css: ReaderStyle.css(settings: settings, pageMode: settings.pageMode),
+                pageMode: settings.pageMode,
                 restoreRatio: model.sectionProgress,
                 resetPosition: model.sectionProgress < 0.001,
                 onProgress: { ratio in
                     model.updateSectionProgress(ratio)
+                },
+                onPages: { current, total in
+                    model.updatePages(current: current, total: total)
+                },
+                onChapterChange: { delta in
+                    if delta > 0 {
+                        model.nextSection()
+                    } else if delta < 0 {
+                        model.previousSection()
+                    }
                 },
                 onTap: { toggleMenu() }
             )
@@ -169,9 +180,15 @@ struct ReaderView: View {
 
                     Spacer()
 
-                    Text("\(model.sectionIndex + 1) / \(model.sectionCount) · \(Int((model.sectionProgress * 100).rounded()))%")
-                        .font(.footnote.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                    Group {
+                        if settings.pageMode && model.pageCount > 1 {
+                            Text("第 \(model.pageIndex + 1) / \(model.pageCount) 页")
+                        } else {
+                            Text("\(model.sectionIndex + 1) / \(model.sectionCount) · \(Int((model.sectionProgress * 100).rounded()))%")
+                        }
+                    }
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(.secondary)
 
                     Spacer()
 
