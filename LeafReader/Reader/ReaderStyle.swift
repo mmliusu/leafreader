@@ -173,8 +173,20 @@ enum ReaderStyle {
         }
       }
 
+      var lastProgrammaticScroll = 0;
+
+      function scrollWindow(x, y) {
+        var currentX = window.scrollX || docScrollLeft();
+        var currentY = window.scrollY || docScrollTop();
+        if (Math.abs(currentX - x) < 1 && Math.abs(currentY - y) < 1) { return; }
+        lastProgrammaticScroll = Date.now();
+        window.scrollTo(x, y);
+      }
+
       function onScroll() {
-        userScrolled = true;
+        if (Date.now() - lastProgrammaticScroll > 240) {
+          userScrolled = true;
+        }
         if (timer) { return; }
         timer = setTimeout(function () {
           timer = null;
@@ -217,9 +229,9 @@ enum ReaderStyle {
             var total = totalPages();
             var page = cfg.reset ? 0 : Math.round(target * (total - 1));
             page = Math.min(total - 1, Math.max(0, page));
-            window.scrollTo(page * pageStep(), 0);
+            scrollWindow(page * pageStep(), 0);
           } else {
-            window.scrollTo(0, cfg.reset ? 0 : Math.round(target * maxScrollTop()));
+            scrollWindow(0, cfg.reset ? 0 : Math.round(target * maxScrollTop()));
           }
         };
 
@@ -293,6 +305,7 @@ enum ReaderStyle {
             else { send('chapter', 'prev'); }
             return;
           }
+          lastProgrammaticScroll = Date.now() + 400;
           window.scrollTo({ left: target * pageStep(), top: 0, behavior: 'smooth' });
         }
       };
