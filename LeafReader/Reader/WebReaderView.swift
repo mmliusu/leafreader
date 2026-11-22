@@ -7,6 +7,7 @@ struct WebReaderView: UIViewRepresentable {
     let readAccessRoot: URL
     let css: String
     let pageMode: Bool
+    let reloadToken: String
     let restoreRatio: Double
     let resetPosition: Bool
     let onProgress: (Double) -> Void
@@ -52,7 +53,7 @@ struct WebReaderView: UIViewRepresentable {
             webView.scrollView.isPagingEnabled = pageMode
         }
 
-        let key = fileURL.path
+        let key = fileURL.path + "|" + reloadToken
         if coordinator.loadedKey != key {
             coordinator.loadedKey = key
             coordinator.latestRatio = restoreRatio

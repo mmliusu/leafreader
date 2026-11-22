@@ -6,6 +6,8 @@ struct LibraryView: View {
     @EnvironmentObject private var settings: ReadingSettings
 
     @State private var showImporter = false
+    @State private var showSearch = false
+    @State private var showSources = false
     @State private var openedBook: Book?
     @State private var pendingDelete: Book?
     @State private var showError = false
@@ -27,14 +29,37 @@ struct LibraryView: View {
             .navigationTitle("书架")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showImporter = true
+                    Menu {
+                        Button {
+                            showSearch = true
+                        } label: {
+                            Label("搜书", systemImage: "magnifyingglass")
+                        }
+                        Button {
+                            showSources = true
+                        } label: {
+                            Label("书源管理", systemImage: "server.rack")
+                        }
+                        Button {
+                            showImporter = true
+                        } label: {
+                            Label("导入本地文件", systemImage: "doc.badge.plus")
+                        }
                     } label: {
                         Image(systemName: "plus")
                     }
-                    .accessibilityLabel("导入书籍")
+                    .accessibilityLabel("添加")
                 }
             }
+        }
+        .sheet(isPresented: $showSearch) {
+            SourceSearchView()
+                .environmentObject(library)
+        }
+        .sheet(isPresented: $showSources) {
+            SourceListView()
+                .environmentObject(BookSourceStore.shared)
+                .environmentObject(library)
         }
         .sheet(isPresented: $showImporter) {
             DocumentPickerView(isPresented: $showImporter) { urls in

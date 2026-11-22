@@ -12,6 +12,11 @@ final class ReaderViewModel: ObservableObject {
     @Published var pageIndex: Int = 0
     @Published var pageCount: Int = 0
     @Published var isLoading = true
+    @Published var isLoadingChapter = false
+    @Published var chapterError: String?
+    @Published var reloadToken = 0
+
+    private var loadingIndexes: Set<Int> = []
     @Published var errorMessage: String?
 
     private var lastPersist = Date.distantPast
@@ -103,6 +108,51 @@ final class ReaderViewModel: ObservableObject {
         pageCount = 0
         isLoading = false
         persistNow()
+        prepareSection(sectionIndex)
+    }
+
+    /// 网络书：章节正文按需抓取并缓存，缓存好后递增 reloadToken 触发重载。
+    func prepareSection(_ index: Int) {
+        guard book.isNetworkBook else { return }
+        let chapters = LibraryStore.shared.chapters(for: book)
+        guard index >= 0, index < chapters.count else { return }
+        if ChapterCache.isCached(bookID: book.id, index: index) { return }
+        guard !loadingIndexes.contains(index) else { return }
+        guard let sourceID = book.sourceID,
+              let source = BookSourceStore.shared.source(id: sourceID) else {
+            chapterError = "书源已被删除，无法加载本章"
+            return
+        }
+
+        let chapter = chapters[index]
+        let bookID = book.id
+        loadingIndexes.insert(index)
+        isLoadingChapter = true
+
+        Task { [weak self] in
+            do {
+                let content = try await BookSourceEngine.content(
+                    source: source,
+                    chapterURL: chapter.url,
+                    title: chapter.title
+                )
+                let html = BookSourceEngine.chapterHTML(title: chapter.title, content: content)
+                ChapterCache.save(html: html, bookID: bookID, index: index)
+                await MainActor.run {
+                    guard let self = self else { return }
+                    self.loadingIndexes.remove(index)
+                    self.isLoadingChapter = false
+                    self.reloadToken += 1
+                }
+            } catch {
+                await MainActor.run {
+                    guard let self = self else { return }
+                    self.loadingIndexes.remove(index)
+                    self.isLoadingChapter = false
+                    self.chapterError = error.localizedDescription
+                }
+            }
+        }
     }
 
     func updatePages(current: Int, total: Int) {
@@ -136,6 +186,7 @@ final class ReaderViewModel: ObservableObject {
         pageIndex = 0
         pageCount = 0
         persistNow()
+        prepareSection(index)
         return true
     }
 

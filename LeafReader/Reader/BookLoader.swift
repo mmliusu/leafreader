@@ -20,6 +20,18 @@ enum BookLoader {
         }
 
         switch book.format {
+        case .txt where book.isNetworkBook:
+            let chapters = LibraryStore.shared.chapters(for: book)
+            guard !chapters.isEmpty else { throw BookLoaderError.empty }
+            let sections = chapters.map { chapter in
+                ReadingSection(
+                    id: chapter.id,
+                    title: chapter.title,
+                    url: ChapterCache.htmlURL(for: book.id, index: chapter.id)
+                )
+            }
+            return ReadingDocument(sections: sections, readAccessRoot: readAccessRoot, format: .txt)
+
         case .txt:
             let output = workDirectory.appendingPathComponent("text", isDirectory: true)
             let sections = try TextBookBuilder.build(sourceURL: fileURL, outputDirectory: output)

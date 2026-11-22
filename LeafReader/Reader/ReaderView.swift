@@ -45,6 +45,14 @@ struct ReaderView: View {
             ReaderSettingsSheet()
                 .environmentObject(settings)
         }
+        .alert("章节加载失败", isPresented: Binding(
+            get: { model.chapterError != nil },
+            set: { if !$0 { model.chapterError = nil } }
+        )) {
+            Button("知道了", role: .cancel) { model.chapterError = nil }
+        } message: {
+            Text(model.chapterError ?? "")
+        }
     }
 
     // MARK: - 内容
@@ -54,6 +62,14 @@ struct ReaderView: View {
         if model.isLoading {
             ProgressView()
                 .tint(settings.theme.foregroundColor)
+        } else if model.isLoadingChapter {
+            VStack(spacing: 12) {
+                ProgressView()
+                Text("正在加载本章…")
+                    .font(AppFont.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .tint(settings.theme.foregroundColor)
         } else if let message = model.errorMessage {
             VStack(spacing: 18) {
                 Image(systemName: "exclamationmark.triangle")
@@ -85,6 +101,7 @@ struct ReaderView: View {
                 css: ReaderStyle.css(
                     settings: settings,
                     pageMode: settings.pageMode,
+                reloadToken: "\(model.reloadToken)",
                     customFontURL: LibraryStore.shared.customFontURL
                 ),
                 pageMode: settings.pageMode,

@@ -60,6 +60,12 @@ struct Book: Identifiable, Codable, Equatable {
     var locator: ReadingLocator
     var coverFileName: String?
     var pageCount: Int?
+    // 网络书
+    var sourceID: String?
+    var bookUrl: String?
+    var chaptersFileName: String?
+    var chapterCount: Int?
+    var coverURLString: String?
 
     init(
         id: UUID = UUID(),
@@ -72,7 +78,12 @@ struct Book: Identifiable, Codable, Equatable {
         lastOpenedAt: Date? = nil,
         locator: ReadingLocator = .start,
         coverFileName: String? = nil,
-        pageCount: Int? = nil
+        pageCount: Int? = nil,
+        sourceID: String? = nil,
+        bookUrl: String? = nil,
+        chaptersFileName: String? = nil,
+        chapterCount: Int? = nil,
+        coverURLString: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -85,11 +96,17 @@ struct Book: Identifiable, Codable, Equatable {
         self.locator = locator
         self.coverFileName = coverFileName
         self.pageCount = pageCount
+        self.sourceID = sourceID
+        self.bookUrl = bookUrl
+        self.chaptersFileName = chaptersFileName
+        self.chapterCount = chapterCount
+        self.coverURLString = coverURLString
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, title, author, format, fileName, fileSize
         case addedAt, lastOpenedAt, locator, coverFileName, pageCount
+        case sourceID, bookUrl, chaptersFileName, chapterCount, coverURLString
     }
 
     init(from decoder: Decoder) throws {
@@ -105,7 +122,15 @@ struct Book: Identifiable, Codable, Equatable {
         locator = try c.decodeIfPresent(ReadingLocator.self, forKey: .locator) ?? .start
         coverFileName = try c.decodeIfPresent(String.self, forKey: .coverFileName)
         pageCount = try c.decodeIfPresent(Int.self, forKey: .pageCount)
+        sourceID = try c.decodeIfPresent(String.self, forKey: .sourceID)
+        bookUrl = try c.decodeIfPresent(String.self, forKey: .bookUrl)
+        chaptersFileName = try c.decodeIfPresent(String.self, forKey: .chaptersFileName)
+        chapterCount = try c.decodeIfPresent(Int.self, forKey: .chapterCount)
+        coverURLString = try c.decodeIfPresent(String.self, forKey: .coverURLString)
     }
+
+    var isNetworkBook: Bool { sourceID != nil }
+    var formatLabel: String { isNetworkBook ? "网络" : format.displayName }
 
     var progress: Double {
         min(max(locator.overall, 0), 1)

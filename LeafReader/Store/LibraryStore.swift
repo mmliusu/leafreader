@@ -158,6 +158,65 @@ final class LibraryStore: ObservableObject {
         return book
     }
 
+    // MARK: - 网络书
+
+    @discardableResult
+    func addNetworkBook(detail: SourceBookDetail) -> Book {
+        if let existing = books.first(where: {
+            $0.sourceID == detail.source.bookSourceUrl && $0.bookUrl == detail.bookUrl
+        }) {
+            return existing
+        }
+
+        let id = UUID()
+        let dir = booksURL.appendingPathComponent(id.uuidString, isDirectory: true)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let chaptersFileName = "chapters.json"
+        if let data = try? JSONEncoder().encode(detail.chapters) {
+            try? data.write(to: dir.appendingPathComponent(chaptersFileName), options: .atomic)
+        }
+
+        let book = Book(
+            id: id,
+            title: detail.name,
+            author: detail.author,
+            format: .txt,
+            fileName: chaptersFileName,
+            fileSize: 0,
+            sourceID: detail.source.bookSourceUrl,
+            bookUrl: detail.bookUrl,
+            chaptersFileName: chaptersFileName,
+            chapterCount: detail.chapters.count,
+            coverURLString: detail.coverUrl
+        )
+        books.insert(book, at: 0)
+        saveIndex()
+        return book
+    }
+
+    func chapters(for book: Book) -> [SourceChapter] {
+        guard let name = book.chaptersFileName else { return [] }
+        let url = directory(for: book).appendingPathComponent(name)
+        guard let data = try? Data(contentsOf: url),
+              let chapters = try? JSONDecoder().decode([SourceChapter].self, from: data) else {
+            return []
+        }
+        return chapters
+    }
+
+    func saveChapters(_ chapters: [SourceChapter], for book: Book) {
+        guard let name = book.chaptersFileName else { return }
+        let url = directory(for: book).appendingPathComponent(name)
+        if let data = try? JSONEncoder().encode(chapters) {
+            try? data.write(to: url, options: .atomic)
+        }
+        if let index = books.firstIndex(where: { $0.id == book.id }) {
+            books[index].chapterCount = chapters.count
+            saveIndex()
+        }
+    }
+
     // MARK: - 更新
 
     func updateLocator(_ locator: ReadingLocator, for bookID: UUID) {
