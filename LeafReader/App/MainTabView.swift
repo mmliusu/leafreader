@@ -14,7 +14,7 @@ struct MainTabView: View {
                     Label("书架", systemImage: "books.vertical")
                 }
 
-            SourceTabView()
+            SourceDiscoverTabView()
                 .environmentObject(sourceStore)
                 .environmentObject(library)
                 .tabItem {
@@ -34,12 +34,6 @@ struct MainTabView: View {
                 }
         }
         .tint(Color(hex: "#2E626B"))
-    }
-}
-
-struct SourceTabView: View {
-    var body: some View {
-        SourceListView(standalone: true)
     }
 }
 
