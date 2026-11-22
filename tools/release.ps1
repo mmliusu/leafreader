@@ -67,5 +67,8 @@ $dist = Join-Path $root 'dist'
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 $zipPath = Join-Path $dist 'LeafReader-unsigned-ipa.zip'
 Invoke-WebRequest -Uri $ipa.archive_download_url -Headers $headers -OutFile $zipPath
-Expand-Archive -Path $zipPath -DestinationPath (Join-Path $dist 'unpacked') -Force
+$unpacked = Join-Path $dist 'unpacked'
+if (Test-Path $unpacked) { Remove-Item $unpacked -Recurse -Force }
+Expand-Archive -Path $zipPath -DestinationPath $unpacked -Force
+Copy-Item (Join-Path $unpacked 'LeafReader-unsigned.ipa') (Join-Path $dist 'LeafReader-unsigned.ipa') -Force
 Write-Host "ipa: $(Join-Path $dist 'unpacked\LeafReader-unsigned.ipa')" -ForegroundColor Green
