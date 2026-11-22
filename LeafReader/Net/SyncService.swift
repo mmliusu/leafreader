@@ -85,6 +85,14 @@ enum SyncService {
         return result
     }
 
+    static func applyReport(_ data: Data, source: String) -> String {
+        guard let package = decode(data) else {
+            return SyncError.decode.errorDescription ?? "备份格式不正确"
+        }
+        let result = apply(package)
+        return "\(source)合并完成：书籍 \(result.books) 本、书源 \(result.sources) 个、书签 \(result.bookmarks) 条，统计已合并"
+    }
+
     static func localBackupURL() -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("leafreader-backup.json")

@@ -5,6 +5,18 @@ struct MainTabView: View {
     @EnvironmentObject private var sourceStore: BookSourceStore
     @EnvironmentObject private var settings: ReadingSettings
 
+    @AppStorage("ui.font") private var uiFontRaw = UIFontChoice.jinling.rawValue
+    @AppStorage("ui.scale") private var uiScaleRaw = 1.0
+    @AppStorage("ui.appearance") private var appearance = "system"
+
+    private var colorScheme: ColorScheme? {
+        switch appearance {
+        case "dark": return .dark
+        case "light": return .light
+        default: return nil
+        }
+    }
+
     var body: some View {
         TabView {
             LibraryView()
@@ -34,6 +46,10 @@ struct MainTabView: View {
                 }
         }
         .tint(Color(hex: "#2E626B"))
+        .preferredColorScheme(colorScheme)
+        .toolbarBackground(.visible, for: .tabBar)
+        .toolbarBackground(Color(uiColor: .systemBackground), for: .tabBar)
+        .id("\(uiFontRaw)-\(uiScaleRaw)")
     }
 }
 

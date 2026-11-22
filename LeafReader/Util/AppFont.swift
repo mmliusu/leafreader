@@ -1,35 +1,84 @@
 import SwiftUI
 import UIKit
 
-/// 全局界面字体：方正细金陵简体（随 App 打包，PostScript 名 FZXIJINLJW--GB1-0）。
-enum AppFont {
-    static let postScriptName = "FZXIJINLJW--GB1-0"
+enum UIFontChoice: String, CaseIterable, Identifiable {
+    case jinling
+    case system
+    case songti
+    case kaiti
+    case pingfang
 
-    /// 不同来源的字体文件命名可能不一致，取不到 PostScript 名时退回已注册的字体名。
-    static let resolvedName: String = {
-        if UIFont(name: postScriptName, size: 16) != nil {
-            return postScriptName
-        }
-        for family in UIFont.familyNames.sorted() {
-            let names = UIFont.fontNames(forFamilyName: family)
-            if let match = names.first(where: { $0.uppercased().contains("JIN") || $0.contains("金陵") }) {
-                return match
-            }
-        }
-        return postScriptName
-    }()
+    var id: String { rawValue }
 
-    static func size(_ value: CGFloat) -> Font {
-        .custom(resolvedName, size: value)
+    var title: String {
+        switch self {
+        case .jinling: return "金陵"
+        case .system: return "系统"
+        case .songti: return "宋体"
+        case .kaiti: return "楷体"
+        case .pingfang: return "黑体"
+        }
     }
 
-    static let title = size(30)
-    static let title3 = size(21)
-    static let headline = size(18)
-    static let body = size(16)
-    static let callout = size(15)
-    static let subheadline = size(14)
-    static let footnote = size(13)
-    static let caption = size(12)
-    static let caption2 = size(11)
+    /// 依次尝试的 PostScript 名，取第一个实际存在的
+    var candidates: [String] {
+        switch self {
+        case .jinling: return ["FZXIJINLJW--GB1-0"]
+        case .system: return []
+        case .songti: return ["STSongti-SC-Regular", "Songti SC"]
+        case .kaiti: return ["STKaiti-SC-Regular", "Kaiti SC"]
+        case .pingfang: return ["PingFangSC-Regular", "PingFang SC"]
+        }
+    }
+}
+
+/// 全局界面字体：读 UserDefaults 的 ui.font / ui.scale，切换后由根视图重建生效。
+enum AppFont {
+    static let fontKey = "ui.font"
+    static let scaleKey = "ui.scale"
+
+    private static var cachedChoice: UIFontChoice?
+    private static var cachedName: String?
+
+    static var scale: CGFloat {
+        let value = UserDefaults.standard.double(forKey: scaleKey)
+        return value > 0 ? CGFloat(value) : 1.0
+    }
+
+    static var choice: UIFontChoice {
+        UIFontChoice(rawValue: UserDefaults.standard.string(forKey: fontKey) ?? "") ?? .jinling
+    }
+
+    static func resolvedName() -> String? {
+        let current = choice
+        if cachedChoice == current {
+            return cachedName
+        }
+        var found: String?
+        for name in current.candidates where UIFont(name: name, size: 16) != nil {
+            found = name
+            break
+        }
+        cachedChoice = current
+        cachedName = found
+        return found
+    }
+
+    static func size(_ value: CGFloat) -> Font {
+        let target = value * scale
+        if let name = resolvedName() {
+            return .custom(name, size: target)
+        }
+        return .system(size: target)
+    }
+
+    static var title: Font { size(30) }
+    static var title3: Font { size(21) }
+    static var headline: Font { size(18) }
+    static var body: Font { size(16) }
+    static var callout: Font { size(15) }
+    static var subheadline: Font { size(14) }
+    static var footnote: Font { size(13) }
+    static var caption: Font { size(12) }
+    static var caption2: Font { size(11) }
 }

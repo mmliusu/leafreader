@@ -51,6 +51,7 @@ struct StatsView: View {
                     if period == .total {
                         barChart(title: "最近 7 天阅读时长", points: store.dailySeries(days: 7), height: 140)
                         barChart(title: "最近 30 天阅读时长", points: store.dailySeries(days: 30), height: 160)
+                        heatmapCard()
                         topBooks
                     } else {
                         summaryCard
@@ -227,6 +228,60 @@ struct StatsView: View {
         }
     }
 
+    // MARK: - 阅读日历
+
+    private func heatmapCard() -> some View {
+        let points = store.dailySeries(days: 70)
+        let maxSeconds = max(points.map { $0.seconds }.max() ?? 0, 60)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("阅读日历")
+                    .font(AppFont.headline)
+                Spacer()
+                Text("最近 10 周")
+                    .font(AppFont.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 7),
+                spacing: 3
+            ) {
+                ForEach(points) { point in
+                    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                        .fill(heatColor(point.seconds, maxSeconds: maxSeconds))
+                        .frame(height: 15)
+                }
+            }
+
+            HStack(spacing: 5) {
+                Text("少")
+                    .font(AppFont.caption2)
+                    .foregroundStyle(.secondary)
+                ForEach([0.0, 0.25, 0.5, 0.75, 1.0], id: \.self) { level in
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(heatColor(Int(Double(maxSeconds) * level), maxSeconds: maxSeconds))
+                        .frame(width: 11, height: 11)
+                }
+                Text("多")
+                    .font(AppFont.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func heatColor(_ seconds: Int, maxSeconds: Int) -> Color {
+        if seconds <= 0 {
+            return Color(uiColor: .tertiarySystemFill)
+        }
+        let ratio = min(1.0, Double(seconds) / Double(max(1, maxSeconds)))
+        return Color(hex: "#2E626B").opacity(0.2 + 0.8 * ratio)
+    }
+
     // MARK: - Top 10
 
     private var topBooks: some View {
@@ -253,10 +308,15 @@ struct StatsView: View {
                             .font(AppFont.caption2.monospacedDigit())
                             .foregroundStyle(.secondary)
                             .frame(width: 18, alignment: .leading)
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: 4) {
                             Text(book.title)
                                 .font(AppFont.footnote)
                                 .lineLimit(1)
+                            ProgressView(
+                                value: Double(seconds),
+                                total: Double(max(top.first?.1 ?? 1, 1))
+                            )
+                            .tint(Color(hex: "#2E626B"))
                             Text("进度 \(book.progressText)")
                                 .font(AppFont.caption2)
                                 .foregroundStyle(.secondary)

@@ -125,6 +125,7 @@ struct SourceDiscoverTabView: View {
                         .buttonStyle(.plain)
                     }
                 }
+                .padding(.bottom, 14)
             }
         }
         .frame(width: 148)
@@ -180,6 +181,7 @@ struct SourceDiscoverTabView: View {
                     }
                 }
                 .padding(14)
+                .padding(.bottom, 14)
             }
         } else {
             Text("选择左侧的书源")
