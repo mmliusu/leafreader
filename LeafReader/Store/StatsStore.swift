@@ -217,6 +217,11 @@ final class StatsStore: ObservableObject {
         save()
     }
 
+    func seconds(for bookID: UUID) -> Int { stats.seconds(for: bookID) }
+    func pageTurns(for bookID: UUID) -> Int { stats.pageTurns(for: bookID) }
+    func chars(for bookID: UUID) -> Int { stats.chars(for: bookID) }
+    func opens(for bookID: UUID) -> Int { stats.opens(for: bookID) }
+
     // MARK: - 区间
 
     static func weekRange() -> DateInterval {
