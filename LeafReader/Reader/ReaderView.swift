@@ -132,6 +132,8 @@ struct ReaderView: View {
                 ),
                 pageMode: settings.pageMode,
                 reloadToken: "\(model.reloadToken)",
+                highlightTerm: model.highlightTerm,
+                highlightToken: model.highlightToken,
                 restoreRatio: model.sectionProgress,
                 resetPosition: model.sectionProgress < 0.001,
                 onProgress: { ratio in
