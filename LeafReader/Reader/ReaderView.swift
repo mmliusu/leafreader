@@ -101,10 +101,10 @@ struct ReaderView: View {
                 css: ReaderStyle.css(
                     settings: settings,
                     pageMode: settings.pageMode,
-                reloadToken: "\(model.reloadToken)",
                     customFontURL: LibraryStore.shared.customFontURL
                 ),
                 pageMode: settings.pageMode,
+                reloadToken: "\(model.reloadToken)",
                 restoreRatio: model.sectionProgress,
                 resetPosition: model.sectionProgress < 0.001,
                 onProgress: { ratio in

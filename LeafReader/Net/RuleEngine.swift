@@ -30,7 +30,7 @@ enum RuleEngine {
         }
 
         if isJSRule(text) {
-            let input = json.map { "\($0)" } ?? (html?.html() ?? "")
+            let input = json.map { "\($0)" } ?? (html.flatMap { try? $0.html() } ?? "")
             let output = JSBridge.shared.evaluate(
                 script: jsBody(text),
                 result: input,
@@ -46,7 +46,7 @@ enum RuleEngine {
 
         if text.hasPrefix(":") {
             let pattern = String(text.dropFirst())
-            let body = html?.html() ?? ""
+            let body = html.flatMap { try? $0.html() } ?? ""
             let items = regexMatches(pattern, in: body)
             return reversed ? Array(items.reversed()) : items
         }
@@ -109,9 +109,9 @@ enum RuleEngine {
         if isJSRule(text) {
             let input: String
             if let element = node as? Element {
-                input = element.html()
+                input = (try? element.html()) ?? ""
             } else if let element = node as? Document {
-                input = element.html()
+                input = (try? element.html()) ?? ""
             } else {
                 input = node.map { "\($0)" } ?? ""
             }
@@ -134,7 +134,7 @@ enum RuleEngine {
 
         if text.hasPrefix(":") {
             let pattern = String(text.dropFirst())
-            let body = html?.html() ?? ""
+            let body = html.flatMap { try? $0.html() } ?? ""
             return regexMatches(pattern, in: body).joined(separator: "\n")
         }
 
@@ -258,9 +258,9 @@ enum RuleEngine {
         case "textnodes":
             return element.textNodes().map { $0.text() }.filter { !$0.isEmpty }.joined(separator: "\n")
         case "html":
-            return element.html()
+            return (try? element.html()) ?? ""
         case "all", "outerhtml":
-            return element.outerHtml()
+            return (try? element.outerHtml()) ?? ""
         default:
             return element.attr(terminal ?? "")
         }
@@ -268,7 +268,7 @@ enum RuleEngine {
 
     /// 保留段落的纯文本：<br> 与块级标签转成换行，再剥离标签。
     static func textLike(_ element: Element) -> String {
-        var html = element.html()
+        var html = (try? element.html()) ?? ""
         let replacements: [(String, String)] = [
             ("<br>", "\n"), ("<br/>", "\n"), ("<br />", "\n"),
             ("</p>", "\n\n"), ("</div>", "\n\n"), ("</li>", "\n"), ("</h1>", "\n\n"),
