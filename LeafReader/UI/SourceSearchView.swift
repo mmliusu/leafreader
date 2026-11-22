@@ -6,7 +6,7 @@ struct SourceSearchView: View {
     @EnvironmentObject private var library: LibraryStore
     @Environment(\.dismiss) private var dismiss
 
-    @State private var keyword = ""
+    @State private var keyword: String
     @State private var results: [SourceSearchResult] = []
     @State private var outcomes: [SourceSearchOutcome] = []
     @State private var searching = false
@@ -15,6 +15,11 @@ struct SourceSearchView: View {
     @State private var searched = false
     @State private var selected: SourceSearchResult?
     @State private var toast: String?
+
+    init(restrictSourceID: String? = nil, initialKeyword: String = "") {
+        self.restrictSourceID = restrictSourceID
+        _keyword = State(initialValue: initialKeyword)
+    }
 
     private var sources: [BookSource] {
         let all = BookSourceStore.shared.enabledSources

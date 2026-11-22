@@ -35,14 +35,15 @@ enum UIFontChoice: String, CaseIterable, Identifiable {
 /// 全局界面字体：读 UserDefaults 的 ui.font / ui.scale，切换后由根视图重建生效。
 enum AppFont {
     static let fontKey = "ui.font"
-    static let scaleKey = "ui.scale"
+    static let baseKey = "ui.base"
 
     private static var cachedChoice: UIFontChoice?
     private static var cachedName: String?
 
-    static var scale: CGFloat {
-        let value = UserDefaults.standard.double(forKey: scaleKey)
-        return value > 0 ? CGFloat(value) : 1.0
+    /// 界面基准字号（正文 16pt），其它字号按比例缩放
+    static var base: CGFloat {
+        let value = UserDefaults.standard.double(forKey: baseKey)
+        return value >= 12 ? CGFloat(value) : 16
     }
 
     static var choice: UIFontChoice {
@@ -65,7 +66,7 @@ enum AppFont {
     }
 
     static func size(_ value: CGFloat) -> Font {
-        let target = value * scale
+        let target = value * base / 16
         if let name = resolvedName() {
             return .custom(name, size: target)
         }

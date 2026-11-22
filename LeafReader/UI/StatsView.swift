@@ -19,6 +19,16 @@ enum StatsPeriod: String, CaseIterable, Identifiable {
         case .year: return "年"
         }
     }
+
+    var overviewTitle: String {
+        switch self {
+        case .total: return "累计阅读总览"
+        case .day: return "当日阅读总览"
+        case .week: return "本周阅读总览"
+        case .month: return "本月阅读总览"
+        case .year: return "今年阅读总览"
+        }
+    }
 }
 
 struct StatsView: View {
@@ -34,7 +44,7 @@ struct StatsView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 14) {
                     Picker("范围", selection: $period) {
                         ForEach(StatsPeriod.allCases) { item in
                             Text(item.title).tag(item)
@@ -42,19 +52,15 @@ struct StatsView: View {
                     }
                     .pickerStyle(.segmented)
 
-                    metricsGrid
-
-                    Text("字数按每页约 400 字估算")
-                        .font(AppFont.caption2)
-                        .foregroundStyle(.secondary)
+                    overviewCard
+                    efficiencyGrid
+                    periodCard
+                    rankingCard
 
                     if period == .total {
                         barChart(title: "最近 7 天阅读时长", points: store.dailySeries(days: 7), height: 140)
                         barChart(title: "最近 30 天阅读时长", points: store.dailySeries(days: 30), height: 160)
                         heatmapCard()
-                        topBooks
-                    } else {
-                        summaryCard
                     }
 
                     if !standalone {
@@ -64,10 +70,11 @@ struct StatsView: View {
                             Label("清空阅读统计", systemImage: "trash")
                                 .font(AppFont.footnote)
                         }
-                        .padding(.top, 6)
+                        .padding(.top, 4)
                     }
                 }
                 .padding(16)
+                .padding(.bottom, 20)
             }
             .navigationTitle("统计")
             .navigationBarTitleDisplayMode(.inline)
@@ -82,12 +89,12 @@ struct StatsView: View {
                 Button("清空", role: .destructive) { store.reset() }
                 Button("取消", role: .cancel) {}
             } message: {
-                Text("时长、翻页、字数记录都会被删除，书架和书源不受影响。")
+                Text("时长、翻页、字数、打开次数都会被删除，书架和书源不受影响。")
             }
         }
     }
 
-    // MARK: - 指标
+    // MARK: - 数据
 
     private var range: DateInterval? {
         switch period {
@@ -122,36 +129,267 @@ struct StatsView: View {
         return store.stats.chars(in: range)
     }
 
-    private var currentBooks: Int {
-        guard let range = range else { return store.stats.lastRead.count }
-        return store.stats.lastRead.values.filter { range.contains($0) }.count
+    private var currentOpens: Int {
+        guard let range = range else { return store.stats.totalOpens }
+        return store.stats.opens(in: range)
     }
 
-    private var metricsGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            metricCard("阅读时长", StatsStore.formatted(currentSeconds), "clock")
-            metricCard("阅读书籍", "\(currentBooks) 本", "books.vertical")
-            metricCard("翻页次数", "\(currentTurns) 次", "rectangle.on.rectangle")
-            metricCard("阅读字数", StatsStore.formattedChars(currentChars), "textformat")
+    private var currentBooks: Int {
+        store.stats.booksRead(in: range)
+    }
+
+    // MARK: - 概览
+
+    private var overviewCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(period.overviewTitle)
+                    .font(AppFont.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Image(systemName: "book")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color(hex: "#2E626B"))
+            }
+
+            Text(StatsStore.formatted(currentSeconds))
+                .font(AppFont.size(30))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+
+            HStack(spacing: 0) {
+                overviewItem("\(currentBooks)", "书籍")
+                overviewItem("\(currentOpens)", "打开")
+                overviewItem("\(currentTurns)", "翻页")
+                overviewItem(StatsStore.formattedChars(currentChars), "字数")
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(hex: "#2E626B").opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func overviewItem(_ value: String, _ title: String) -> some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(AppFont.size(15).monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(title)
+                .font(AppFont.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - 效率
+
+    private var efficiencyGrid: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("效率指标")
+                .font(AppFont.headline)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                efficiencyCard("平均阅读", "每本书", averageText, "clock", Color(hex: "#3D8B7A"))
+                efficiencyCard("翻页速度", "平均每页", speedText, "gauge", Color(hex: "#C07A3A"))
+                efficiencyCard("阅读效率", "每分钟翻页", efficiencyText, "speedometer", Color(hex: "#3A6EA5"))
+                efficiencyCard("使用频次", "每本书打开", frequencyText, "arrow.triangle.2.circlepath", Color(hex: "#7B5EA7"))
+            }
         }
     }
 
-    private func metricCard(_ title: String, _ value: String, _ symbol: String) -> some View {
+    private func efficiencyCard(
+        _ title: String,
+        _ subtitle: String,
+        _ value: String,
+        _ symbol: String,
+        _ tint: Color
+    ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 4) {
+            HStack(spacing: 5) {
                 Image(systemName: symbol)
                     .font(.system(size: 12))
+                    .foregroundStyle(tint)
                 Text(title)
                     .font(AppFont.caption2)
+                    .foregroundStyle(.secondary)
             }
-            .foregroundStyle(.secondary)
             Text(value)
-                .font(AppFont.title3)
+                .font(AppFont.size(18))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
+            Text(subtitle)
+                .font(AppFont.caption2)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var averageText: String {
+        guard currentBooks > 0 else { return "0 分钟" }
+        let minutes = Double(currentSeconds) / 60.0 / Double(currentBooks)
+        return String(format: "%.1f 分钟", minutes)
+    }
+
+    private var speedText: String {
+        guard currentTurns > 0 else { return "-- 秒/页" }
+        return String(format: "%.1f 秒/页", Double(currentSeconds) / Double(currentTurns))
+    }
+
+    private var efficiencyText: String {
+        guard currentSeconds > 0 else { return "-- 页/分" }
+        let minutes = Double(currentSeconds) / 60.0
+        return String(format: "%.1f 页/分", Double(currentTurns) / max(minutes, 0.001))
+    }
+
+    private var frequencyText: String {
+        guard currentBooks > 0 else { return "0 次/书" }
+        return String(format: "%.1f 次/书", Double(currentOpens) / Double(currentBooks))
+    }
+
+    // MARK: - 时段分布
+
+    private var periodShares: [(title: String, seconds: Int)] {
+        let hours = store.stats.hourlyDistribution()
+        let segments: [(String, Int, Int)] = [
+            ("凌晨 0-6", 0, 6),
+            ("上午 6-12", 6, 12),
+            ("下午 12-18", 12, 18),
+            ("晚上 18-24", 18, 24)
+        ]
+        return segments.map { item in
+            let value = (item.1..<item.2).reduce(0) { $0 + hours[$1] }
+            return (item.0, value)
+        }
+    }
+
+    private var periodCard: some View {
+        let shares = periodShares
+        let total = shares.reduce(0) { $0 + $1.seconds }
+        let top = shares.max { $0.seconds < $1.seconds }
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("时间分布")
+                    .font(AppFont.headline)
+                Spacer()
+                Text("累计")
+                    .font(AppFont.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            if total <= 0 {
+                Text("还没有足够的阅读记录")
+                    .font(AppFont.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                if let top = top, top.seconds > 0 {
+                    HStack(spacing: 6) {
+                        Text(top.title)
+                            .font(AppFont.footnote)
+                        Text("\(Int((Double(top.seconds) / Double(total) * 100).rounded()))%")
+                            .font(AppFont.footnote.monospacedDigit())
+                            .foregroundStyle(Color(hex: "#2E626B"))
+                        Spacer()
+                        Text(StatsStore.formatted(top.seconds))
+                            .font(AppFont.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                ForEach(shares.indices, id: \.self) { index in
+                    let share = shares[index]
+                    let ratio = total > 0 ? Double(share.seconds) / Double(total) : 0
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(share.title)
+                                .font(AppFont.caption2)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(Int((ratio * 100).rounded()))%")
+                                .font(AppFont.caption2.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                        GeometryReader { proxy in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(Color(uiColor: .tertiarySystemFill))
+                                Capsule()
+                                    .fill(Color(hex: "#2E626B"))
+                                    .frame(width: max(2, proxy.size.width * ratio))
+                            }
+                        }
+                        .frame(height: 5)
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    // MARK: - 排行
+
+    private var ranking: [(book: Book?, seconds: Int)] {
+        Array(store.stats.bookRanking(in: range).prefix(8)).map { item in
+            (library.books.first { $0.id.uuidString == item.id }, item.seconds)
+        }
+    }
+
+    private var rankingCard: some View {
+        let items = ranking
+        let maxSeconds = max(items.first?.seconds ?? 1, 1)
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("阅读排行")
+                    .font(AppFont.headline)
+                Spacer()
+                Text(period == .total ? "全部时间" : period.title)
+                    .font(AppFont.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            if items.isEmpty {
+                Text("这个范围内还没有阅读记录")
+                    .font(AppFont.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(items.indices, id: \.self) { index in
+                    let item = items[index]
+                    HStack(spacing: 10) {
+                        Text("\(index + 1)")
+                            .font(AppFont.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 16, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item.book?.title ?? "未知书籍")
+                                .font(AppFont.footnote)
+                                .lineLimit(1)
+                            GeometryReader { proxy in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(Color(uiColor: .tertiarySystemFill))
+                                    Capsule()
+                                        .fill(Color(hex: "#2E626B"))
+                                        .frame(width: max(2, proxy.size.width * CGFloat(item.seconds) / CGFloat(maxSeconds)))
+                                }
+                            }
+                            .frame(height: 4)
+                        }
+                        Spacer(minLength: 4)
+                        Text(StatsStore.formatted(item.seconds))
+                            .font(AppFont.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
@@ -193,42 +431,6 @@ struct StatsView: View {
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
-
-    // MARK: - 周期摘要
-
-    private var summaryCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("\(period.title)统计")
-                .font(AppFont.headline)
-            Text(summaryLine)
-                .font(AppFont.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-
-    private var summaryLine: String {
-        let seconds = StatsStore.formatted(currentSeconds)
-        let chars = StatsStore.formattedChars(currentChars)
-        switch period {
-        case .day:
-            return "今天阅读 \(seconds)，翻页 \(currentTurns) 次，约 \(chars)，涉及 \(currentBooks) 本书。"
-        case .week:
-            return "本周阅读 \(seconds)，翻页 \(currentTurns) 次，约 \(chars)，涉及 \(currentBooks) 本书。"
-        case .month:
-            return "本月阅读 \(seconds)，翻页 \(currentTurns) 次，约 \(chars)，涉及 \(currentBooks) 本书。"
-        case .year:
-            return "今年阅读 \(seconds)，翻页 \(currentTurns) 次，约 \(chars)，涉及 \(currentBooks) 本书。"
-        case .total:
-            return ""
-        }
-    }
-
-    // MARK: - 阅读日历
 
     private func heatmapCard() -> some View {
         let points = store.dailySeries(days: 70)
@@ -280,58 +482,5 @@ struct StatsView: View {
         }
         let ratio = min(1.0, Double(seconds) / Double(max(1, maxSeconds)))
         return Color(hex: "#2E626B").opacity(0.2 + 0.8 * ratio)
-    }
-
-    // MARK: - Top 10
-
-    private var topBooks: some View {
-        let ranked = library.books
-            .map { ($0, store.seconds(for: $0.id)) }
-            .filter { $0.1 > 0 }
-            .sorted { $0.1 > $1.1 }
-        let top = Array(ranked.prefix(10))
-
-        return VStack(alignment: .leading, spacing: 10) {
-            Text("阅读时长 Top 10")
-                .font(AppFont.headline)
-
-            if top.isEmpty {
-                Text("还没有阅读记录")
-                    .font(AppFont.footnote)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(top.indices, id: \.self) { index in
-                    let book = top[index].0
-                    let seconds = top[index].1
-                    HStack(spacing: 10) {
-                        Text("\(index + 1)")
-                            .font(AppFont.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .frame(width: 18, alignment: .leading)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(book.title)
-                                .font(AppFont.footnote)
-                                .lineLimit(1)
-                            ProgressView(
-                                value: Double(seconds),
-                                total: Double(max(top.first?.1 ?? 1, 1))
-                            )
-                            .tint(Color(hex: "#2E626B"))
-                            Text("进度 \(book.progressText)")
-                                .font(AppFont.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 4)
-                        Text(StatsStore.formatted(seconds))
-                            .font(AppFont.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

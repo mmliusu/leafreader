@@ -10,9 +10,15 @@ struct ReadingStats: Codable {
     var bookChars: [String: Int] = [:]
     var dailyChars: [String: Int] = [:]
 
+    var bookOpens: [String: Int] = [:]
+    var dailyOpens: [String: Int] = [:]
+    var hourlySeconds: [String: Int] = [:]
+    var dailyBookSeconds: [String: [String: Int]] = [:]
+
     private enum CodingKeys: String, CodingKey {
         case bookSeconds, dailySeconds, lastRead
         case bookPageTurns, dailyPageTurns, bookChars, dailyChars
+        case bookOpens, dailyOpens, hourlySeconds, dailyBookSeconds
     }
 
     init() {}
@@ -26,48 +32,62 @@ struct ReadingStats: Codable {
         dailyPageTurns = try c.decodeIfPresent([String: Int].self, forKey: .dailyPageTurns) ?? [:]
         bookChars = try c.decodeIfPresent([String: Int].self, forKey: .bookChars) ?? [:]
         dailyChars = try c.decodeIfPresent([String: Int].self, forKey: .dailyChars) ?? [:]
+        bookOpens = try c.decodeIfPresent([String: Int].self, forKey: .bookOpens) ?? [:]
+        dailyOpens = try c.decodeIfPresent([String: Int].self, forKey: .dailyOpens) ?? [:]
+        hourlySeconds = try c.decodeIfPresent([String: Int].self, forKey: .hourlySeconds) ?? [:]
+        dailyBookSeconds = try c.decodeIfPresent([String: [String: Int]].self, forKey: .dailyBookSeconds) ?? [:]
     }
 
     // MARK: - 读取
 
-    func seconds(for bookID: UUID) -> Int {
-        bookSeconds[bookID.uuidString] ?? 0
-    }
+    func seconds(for bookID: UUID) -> Int { bookSeconds[bookID.uuidString] ?? 0 }
+    func pageTurns(for bookID: UUID) -> Int { bookPageTurns[bookID.uuidString] ?? 0 }
+    func chars(for bookID: UUID) -> Int { bookChars[bookID.uuidString] ?? 0 }
+    func opens(for bookID: UUID) -> Int { bookOpens[bookID.uuidString] ?? 0 }
 
-    func pageTurns(for bookID: UUID) -> Int {
-        bookPageTurns[bookID.uuidString] ?? 0
-    }
-
-    func chars(for bookID: UUID) -> Int {
-        bookChars[bookID.uuidString] ?? 0
-    }
-
-    func seconds(on date: Date) -> Int {
-        dailySeconds[ReadingStats.dayKey(date)] ?? 0
-    }
-
-    func pageTurns(on date: Date) -> Int {
-        dailyPageTurns[ReadingStats.dayKey(date)] ?? 0
-    }
-
-    func chars(on date: Date) -> Int {
-        dailyChars[ReadingStats.dayKey(date)] ?? 0
-    }
+    func seconds(on date: Date) -> Int { dailySeconds[ReadingStats.dayKey(date)] ?? 0 }
+    func pageTurns(on date: Date) -> Int { dailyPageTurns[ReadingStats.dayKey(date)] ?? 0 }
+    func chars(on date: Date) -> Int { dailyChars[ReadingStats.dayKey(date)] ?? 0 }
+    func opens(on date: Date) -> Int { dailyOpens[ReadingStats.dayKey(date)] ?? 0 }
 
     var totalSeconds: Int { bookSeconds.values.reduce(0, +) }
     var totalPageTurns: Int { bookPageTurns.values.reduce(0, +) }
     var totalChars: Int { bookChars.values.reduce(0, +) }
+    var totalOpens: Int { bookOpens.values.reduce(0, +) }
 
-    func seconds(in range: DateInterval) -> Int {
-        sum(dailySeconds, in: range)
+    func seconds(in range: DateInterval) -> Int { sum(dailySeconds, in: range) }
+    func pageTurns(in range: DateInterval) -> Int { sum(dailyPageTurns, in: range) }
+    func chars(in range: DateInterval) -> Int { sum(dailyChars, in: range) }
+    func opens(in range: DateInterval) -> Int { sum(dailyOpens, in: range) }
+
+    func booksRead(in range: DateInterval?) -> Int {
+        guard let range = range else { return lastRead.count }
+        return lastRead.values.filter { range.contains($0) }.count
     }
 
-    func pageTurns(in range: DateInterval) -> Int {
-        sum(dailyPageTurns, in: range)
+    /// 区间内每本书的阅读时长（bookID.uppercaseString -> 秒），按降序
+    func bookRanking(in range: DateInterval?) -> [(id: String, seconds: Int)] {
+        guard let range = range else {
+            return bookSeconds.sorted { $0.value > $1.value }.map { ($0.key, $0.value) }
+        }
+        var totals: [String: Int] = [:]
+        for (day, map) in dailyBookSeconds {
+            guard let date = ReadingStats.date(fromKey: day), range.contains(date) else { continue }
+            for (book, value) in map {
+                totals[book, default: 0] += value
+            }
+        }
+        return totals.sorted { $0.value > $1.value }.map { ($0.key, $0.value) }
     }
 
-    func chars(in range: DateInterval) -> Int {
-        sum(dailyChars, in: range)
+    /// 24 小时累计分布
+    func hourlyDistribution() -> [Int] {
+        var result = [Int](repeating: 0, count: 24)
+        for (key, value) in hourlySeconds {
+            guard let hour = Int(key), hour >= 0, hour < 24 else { continue }
+            result[hour] += value
+        }
+        return result
     }
 
     private func sum(_ source: [String: Int], in range: DateInterval) -> Int {
@@ -128,10 +148,14 @@ final class StatsStore: ObservableObject {
         let key = bookID.uuidString
         let day = ReadingStats.dayKey(date)
         var next = stats
+
         if seconds > 0 {
             next.bookSeconds[key, default: 0] += seconds
             next.dailySeconds[day, default: 0] += seconds
             next.lastRead[key] = date
+            let hour = Calendar.current.component(.hour, from: date)
+            next.hourlySeconds["\(hour)", default: 0] += seconds
+            next.dailyBookSeconds[day, default: [:]][key, default: 0] += seconds
         }
         if pageTurns > 0 {
             next.bookPageTurns[key, default: 0] += pageTurns
@@ -145,7 +169,17 @@ final class StatsStore: ObservableObject {
         scheduleSave()
     }
 
-    /// 同步导入时整体替换
+    func addOpen(bookID: UUID, date: Date = Date()) {
+        let key = bookID.uuidString
+        let day = ReadingStats.dayKey(date)
+        var next = stats
+        next.bookOpens[key, default: 0] += 1
+        next.dailyOpens[day, default: 0] += 1
+        next.lastRead[key] = date
+        stats = next
+        scheduleSave()
+    }
+
     func replace(_ value: ReadingStats) {
         stats = value
         save()
@@ -159,6 +193,14 @@ final class StatsStore: ObservableObject {
         for (key, value) in other.dailyPageTurns { next.dailyPageTurns[key, default: 0] += value }
         for (key, value) in other.bookChars { next.bookChars[key, default: 0] += value }
         for (key, value) in other.dailyChars { next.dailyChars[key, default: 0] += value }
+        for (key, value) in other.bookOpens { next.bookOpens[key, default: 0] += value }
+        for (key, value) in other.dailyOpens { next.dailyOpens[key, default: 0] += value }
+        for (key, value) in other.hourlySeconds { next.hourlySeconds[key, default: 0] += value }
+        for (day, map) in other.dailyBookSeconds {
+            for (book, value) in map {
+                next.dailyBookSeconds[day, default: [:]][book, default: 0] += value
+            }
+        }
         for (key, value) in other.lastRead {
             if let existing = next.lastRead[key] {
                 next.lastRead[key] = max(existing, value)
@@ -169,15 +211,6 @@ final class StatsStore: ObservableObject {
         stats = next
         save()
     }
-
-    func seconds(for bookID: UUID) -> Int { stats.seconds(for: bookID) }
-    func pageTurns(for bookID: UUID) -> Int { stats.pageTurns(for: bookID) }
-    func chars(for bookID: UUID) -> Int { stats.chars(for: bookID) }
-
-    func todaySeconds() -> Int { stats.seconds(on: Date()) }
-    func weekSeconds() -> Int { stats.seconds(in: Self.weekRange()) }
-    func monthSeconds() -> Int { stats.seconds(in: Self.monthRange()) }
-    func yearSeconds() -> Int { stats.seconds(in: Self.yearRange()) }
 
     func reset() {
         stats = ReadingStats()
@@ -209,7 +242,6 @@ final class StatsStore: ObservableObject {
         return DateInterval(start: start, end: now.addingTimeInterval(1))
     }
 
-    /// 最近 n 天（含今天）的每日数据，按日期升序
     func dailySeries(days: Int) -> [DailyStatPoint] {
         let calendar = Calendar.current
         var result: [DailyStatPoint] = []

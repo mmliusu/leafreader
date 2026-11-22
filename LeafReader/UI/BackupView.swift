@@ -11,6 +11,7 @@ struct BackupView: View {
     @State private var exportURL: URL?
     @State private var showImporter = false
     @State private var message: String?
+    @State private var showClearConfirm = false
 
     var body: some View {
         Form {
@@ -48,6 +49,18 @@ struct BackupView: View {
                     LabeledContent("上次同步", value: lastSyncText)
                 }
             }
+
+            Section {
+                Button(role: .destructive) {
+                    showClearConfirm = true
+                } label: {
+                    Label("清除所有统计记录", systemImage: "trash")
+                }
+            } header: {
+                Text("数据管理")
+            } footer: {
+                Text("只清除阅读时长、翻页、字数与打开次数等统计，不会删除书架、书源、书签和阅读进度。")
+            }
         }
         .navigationTitle("备份与恢复")
         .navigationBarTitleDisplayMode(.inline)
@@ -62,6 +75,15 @@ struct BackupView: View {
             SourceFilePicker(isPresented: $showImporter) { urls in
                 importBackup(urls)
             }
+        }
+        .confirmationDialog("清除所有统计记录？", isPresented: $showClearConfirm, titleVisibility: .visible) {
+            Button("清除", role: .destructive) {
+                StatsStore.shared.reset()
+                message = "已清除全部统计记录"
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("阅读时长、翻页次数、阅读字数都会归零，此操作不可恢复。")
         }
         .alert("备份", isPresented: Binding(
             get: { message != nil },

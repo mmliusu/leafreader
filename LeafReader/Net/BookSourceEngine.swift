@@ -156,7 +156,12 @@ enum BookSourceEngine {
     static func exploreBooks(source: BookSource, category: ExploreCategory, page: Int) async -> [SourceSearchResult] {
         guard !category.url.isEmpty else { return [] }
         var vars: [String: String] = ["page": "\(page)", "key": ""]
-        let target = RuleEngine.expand(category.url, vars: vars)
+        var target = category.url
+        // 分类地址没写 {{page}} 时，按常见约定追加 page 参数，否则"加载更多"永远停在第 1 页
+        if page > 1, !target.contains("{{page}}") {
+            target += target.contains("?") ? "&page=\(page)" : "?page=\(page)"
+        }
+        target = RuleEngine.expand(target, vars: vars)
         guard let result = try? await loadPage(target, source: source) else { return [] }
         guard let rule = source.ruleExplore ?? source.ruleSearch else { return [] }
         return parseBookList(rule, page: result, source: source, vars: &vars)

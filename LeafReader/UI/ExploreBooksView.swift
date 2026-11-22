@@ -13,6 +13,8 @@ struct ExploreBooksView: View {
     @State private var finished = false
     @State private var selected: SourceSearchResult?
     @State private var toast: String?
+    @State private var browserTarget: BrowserTarget?
+    @State private var showSearch = false
 
     var body: some View {
         List {
@@ -25,9 +27,32 @@ struct ExploreBooksView: View {
             }
 
             if !loading && books.isEmpty {
-                Text("这个分类没有解析到书籍，可能书源规则不兼容或分类地址失效。")
-                    .font(AppFont.footnote)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("这个分类没有解析到书籍")
+                        .font(AppFont.headline)
+                    Text("可能书源规则不兼容，或分类地址已经失效。可以先用内置浏览器看实际页面，或者把这个分类名当关键词搜索这个源。")
+                        .font(AppFont.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 10) {
+                        Button {
+                            if let url = URL(string: BookSourceEngine.absolute(category.url, base: source.bookSourceUrl)) {
+                                browserTarget = BrowserTarget(url: url, name: category.title)
+                            }
+                        } label: {
+                            Label("查看页面", systemImage: "safari")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button {
+                            showSearch = true
+                        } label: {
+                            Label("搜同名", systemImage: "magnifyingglass")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+                .padding(.vertical, 8)
             }
 
             ForEach(books) { item in
@@ -58,6 +83,13 @@ struct ExploreBooksView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             if books.isEmpty { await load(reset: true) }
+        }
+        .sheet(item: $browserTarget) { target in
+            BrowserPreview(url: target.url, sourceName: source.displayName)
+        }
+        .sheet(isPresented: $showSearch) {
+            SourceSearchView(restrictSourceID: source.bookSourceUrl, initialKeyword: category.title)
+                .environmentObject(library)
         }
         .sheet(item: $selected) { item in
             BookDetailView(result: item)

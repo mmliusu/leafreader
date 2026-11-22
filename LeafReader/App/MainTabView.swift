@@ -6,7 +6,7 @@ struct MainTabView: View {
     @EnvironmentObject private var settings: ReadingSettings
 
     @AppStorage("ui.font") private var uiFontRaw = UIFontChoice.jinling.rawValue
-    @AppStorage("ui.scale") private var uiScaleRaw = 1.0
+    @AppStorage("ui.base") private var uiBaseRaw = 16.0
     @AppStorage("ui.appearance") private var appearance = "system"
 
     private var colorScheme: ColorScheme? {
@@ -49,7 +49,7 @@ struct MainTabView: View {
         .preferredColorScheme(colorScheme)
         .toolbarBackground(.visible, for: .tabBar)
         .toolbarBackground(Color(uiColor: .systemBackground), for: .tabBar)
-        .id("\(uiFontRaw)-\(uiScaleRaw)")
+        .id("\(uiFontRaw)-\(uiBaseRaw)")
     }
 }
 

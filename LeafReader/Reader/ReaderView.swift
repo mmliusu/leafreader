@@ -33,6 +33,7 @@ struct ReaderView: View {
         .onAppear {
             sessionStart = Date()
             LibraryStore.shared.markOpened(model.book.id)
+            StatsStore.shared.addOpen(bookID: model.book.id)
             model.load()
         }
         .onDisappear {
