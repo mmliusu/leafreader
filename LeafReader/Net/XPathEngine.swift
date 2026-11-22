@@ -54,7 +54,7 @@ enum XPathEngine {
                 let pool: [Element]
                 switch step.axis {
                 case .descendant:
-                    pool = Array(node.descendants())
+                    pool = Array(node.getAllElements())
                 case .child:
                     pool = Array(node.children())
                 }
@@ -78,7 +78,7 @@ enum XPathEngine {
         }
 
         if terminalText {
-            return current.map { $0.text() }
+            return current.map { (try? $0.text()) ?? "" }
         }
         if let attr = terminalAttr {
             return current.map { (try? $0.attr(attr)) ?? "" }
@@ -195,7 +195,7 @@ enum XPathEngine {
         case .attrContains(let name, let value):
             return ((try? element.attr(name)) ?? "").contains(value)
         case .textContains(let value):
-            return element.text().contains(value)
+            return ((try? element.text()) ?? "").contains(value)
         case .unsupported:
             return true
         }

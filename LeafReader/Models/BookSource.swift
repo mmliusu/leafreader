@@ -14,6 +14,7 @@ struct BookSource: Codable, Identifiable, Equatable {
     var jsLib: String?
     var weight: Int?
     var ruleSearch: BookListRule?
+    var ruleExplore: BookListRule?
     var ruleBookInfo: BookInfoRule?
     var ruleToc: TocRule?
     var ruleContent: ContentRule?

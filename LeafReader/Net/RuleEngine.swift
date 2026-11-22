@@ -412,7 +412,7 @@ enum RuleEngine {
     }
 
     private static func describe(_ value: Any) -> String {
-        if let element = value as? Element { return element.text() }
+        if let element = value as? Element { return (try? element.text()) ?? "" }
         if let string = value as? String { return string }
         if let number = value as? NSNumber { return number.stringValue }
         if let dict = value as? [String: Any] {
