@@ -29,10 +29,8 @@ struct LibraryView: View {
 
     @State private var showImporter = false
     @State private var showSearch = false
-    @State private var showSources = false
     @State private var showExplore = false
     @State private var showCrossSearch = false
-    @State private var showStats = false
     @State private var query = ""
     @AppStorage("library.sort") private var sortRaw = LibrarySort.recent.rawValue
     @State private var openedBook: Book?
@@ -69,11 +67,6 @@ struct LibraryView: View {
                         } label: {
                             Label("全文搜索", systemImage: "text.magnifyingglass")
                         }
-                        Button {
-                            showStats = true
-                        } label: {
-                            Label("阅读统计", systemImage: "chart.bar")
-                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
@@ -89,11 +82,6 @@ struct LibraryView: View {
                             showExplore = true
                         } label: {
                             Label("发现", systemImage: "safari")
-                        }
-                        Button {
-                            showSources = true
-                        } label: {
-                            Label("书源管理", systemImage: "server.rack")
                         }
                         Button {
                             showImporter = true
@@ -115,17 +103,8 @@ struct LibraryView: View {
             CrossBookSearchView()
                 .environmentObject(library)
         }
-        .sheet(isPresented: $showStats) {
-            StatsView()
-                .environmentObject(library)
-        }
         .sheet(isPresented: $showExplore) {
             SourceExploreView()
-                .environmentObject(library)
-        }
-        .sheet(isPresented: $showSources) {
-            SourceListView()
-                .environmentObject(BookSourceStore.shared)
                 .environmentObject(library)
         }
         .sheet(isPresented: $showImporter) {

@@ -307,8 +307,14 @@ struct ReaderView: View {
     private func flushSession() {
         let seconds = Int(Date().timeIntervalSince(sessionStart))
         sessionStart = Date()
-        guard seconds >= 5 else { return }
-        StatsStore.shared.add(seconds: seconds, bookID: model.book.id)
+        let turns = model.consumePageTurns()
+        guard seconds >= 5 || turns > 0 else { return }
+        StatsStore.shared.add(
+            seconds: max(0, seconds),
+            pageTurns: turns,
+            chars: turns * 400,
+            bookID: model.book.id
+        )
     }
 
     private func jump(to mark: Bookmark) {

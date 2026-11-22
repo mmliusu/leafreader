@@ -9,7 +9,7 @@ struct LeafReaderApp: App {
 
     var body: some Scene {
         WindowGroup {
-            LibraryView()
+            MainTabView()
                 .environmentObject(library)
                 .environmentObject(settings)
                 .environmentObject(sourceStore)

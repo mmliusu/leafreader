@@ -128,6 +128,20 @@ final class BookSourceStore: ObservableObject {
         save()
     }
 
+    func merge(_ incoming: [BookSource]) {
+        for source in incoming {
+            if let index = sources.firstIndex(where: { $0.bookSourceUrl == source.bookSourceUrl }) {
+                var updated = source
+                updated.enabled = sources[index].enabled
+                sources[index] = updated
+            } else {
+                sources.append(source)
+            }
+        }
+        sort()
+        save()
+    }
+
     func removeAll() {
         sources.removeAll()
         save()

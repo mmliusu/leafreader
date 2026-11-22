@@ -19,6 +19,7 @@ final class ReaderViewModel: ObservableObject {
     @Published var highlightToken = 0
 
     private var loadingIndexes: Set<Int> = []
+    private(set) var sessionPageTurns = 0
     @Published var errorMessage: String?
 
     private var lastPersist = Date.distantPast
@@ -159,7 +160,16 @@ final class ReaderViewModel: ObservableObject {
 
     func updatePages(current: Int, total: Int) {
         if pageCount != total { pageCount = total }
-        if pageIndex != current { pageIndex = current }
+        if pageIndex != current {
+            sessionPageTurns += 1
+            pageIndex = current
+        }
+    }
+
+    func consumePageTurns() -> Int {
+        let value = sessionPageTurns
+        sessionPageTurns = 0
+        return value
     }
 
     // MARK: - 进度
@@ -187,6 +197,7 @@ final class ReaderViewModel: ObservableObject {
         sectionProgress = 0
         pageIndex = 0
         pageCount = 0
+        sessionPageTurns += 1
         persistNow()
         prepareSection(index)
         return true

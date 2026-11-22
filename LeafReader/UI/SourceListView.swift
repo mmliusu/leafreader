@@ -2,6 +2,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct SourceListView: View {
+    var standalone: Bool = false
+
     @EnvironmentObject private var sourceStore: BookSourceStore
     @Environment(\.dismiss) private var dismiss
 
@@ -41,8 +43,10 @@ struct SourceListView: View {
             .navigationTitle("书源")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("完成") { dismiss() }
+                if !standalone {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("完成") { dismiss() }
+                    }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {

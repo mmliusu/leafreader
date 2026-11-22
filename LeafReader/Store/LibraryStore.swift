@@ -158,6 +158,39 @@ final class LibraryStore: ObservableObject {
         return book
     }
 
+    // MARK: - 同步合并
+
+    @discardableResult
+    func mergeBooks(_ incoming: [Book]) -> Int {
+        var count = 0
+        for item in incoming {
+            guard let index = books.firstIndex(where: { $0.id == item.id }) else { continue }
+            if item.progress > books[index].progress {
+                books[index].locator = item.locator
+                books[index].lastOpenedAt = item.lastOpenedAt ?? books[index].lastOpenedAt
+            }
+            if books[index].title.isEmpty, !item.title.isEmpty {
+                books[index].title = item.title
+            }
+            count += 1
+        }
+        if count > 0 { saveIndex() }
+        return count
+    }
+
+    @discardableResult
+    func mergeBookmarks(_ incoming: [Bookmark], for book: Book) -> Int {
+        var list = bookmarks(for: book)
+        let existing = Set(list.map { $0.id })
+        var added = 0
+        for mark in incoming where !existing.contains(mark.id) {
+            list.append(mark)
+            added += 1
+        }
+        if added > 0 { saveBookmarks(list, for: book) }
+        return added
+    }
+
     // MARK: - 书签
 
     private func bookmarksURL(for book: Book) -> URL {
