@@ -14,11 +14,16 @@ struct ReadingStats: Codable {
     var dailyOpens: [String: Int] = [:]
     var hourlySeconds: [String: Int] = [:]
     var dailyBookSeconds: [String: [String: Int]] = [:]
+    var sessionSeconds: [Int] = []
+    var dailyBookOpens: [String: [String: Int]] = [:]
+    var dailyFirstHour: [String: Int] = [:]
+    var dailyLastHour: [String: Int] = [:]
 
     private enum CodingKeys: String, CodingKey {
         case bookSeconds, dailySeconds, lastRead
         case bookPageTurns, dailyPageTurns, bookChars, dailyChars
         case bookOpens, dailyOpens, hourlySeconds, dailyBookSeconds
+        case sessionSeconds, dailyBookOpens, dailyFirstHour, dailyLastHour
     }
 
     init() {}
@@ -36,6 +41,10 @@ struct ReadingStats: Codable {
         dailyOpens = try c.decodeIfPresent([String: Int].self, forKey: .dailyOpens) ?? [:]
         hourlySeconds = try c.decodeIfPresent([String: Int].self, forKey: .hourlySeconds) ?? [:]
         dailyBookSeconds = try c.decodeIfPresent([String: [String: Int]].self, forKey: .dailyBookSeconds) ?? [:]
+        sessionSeconds = try c.decodeIfPresent([Int].self, forKey: .sessionSeconds) ?? []
+        dailyBookOpens = try c.decodeIfPresent([String: [String: Int]].self, forKey: .dailyBookOpens) ?? [:]
+        dailyFirstHour = try c.decodeIfPresent([String: Int].self, forKey: .dailyFirstHour) ?? [:]
+        dailyLastHour = try c.decodeIfPresent([String: Int].self, forKey: .dailyLastHour) ?? [:]
     }
 
     // MARK: - 读取
@@ -78,6 +87,70 @@ struct ReadingStats: Codable {
             }
         }
         return totals.sorted { $0.value > $1.value }.map { ($0.key, $0.value) }
+    }
+
+    /// 区间内每本书的打开次数
+    func bookOpenRanking(in range: DateInterval?) -> [(id: String, opens: Int)] {
+        guard let range = range else {
+            return bookOpens.sorted { $0.value > $1.value }.map { ($0.key, $0.value) }
+        }
+        var totals: [String: Int] = [:]
+        for (day, map) in dailyBookOpens {
+            guard let date = ReadingStats.date(fromKey: day), range.contains(date) else { continue }
+            for (book, value) in map { totals[book, default: 0] += value }
+        }
+        return totals.sorted { $0.value > $1.value }.map { ($0.key, $0.value) }
+    }
+
+    func sessionSummary() -> (count: Int, longest: Int, average: Int) {
+        guard !sessionSeconds.isEmpty else { return (0, 0, 0) }
+        let total = sessionSeconds.reduce(0, +)
+        return (sessionSeconds.count, sessionSeconds.max() ?? 0, total / sessionSeconds.count)
+    }
+
+    /// 连续阅读天数（从 end 往前数，遇到 0 分钟即停止）
+    func continuousDays(upTo end: Date = Date()) -> Int {
+        let calendar = Calendar.current
+        var streak = 0
+        var day = calendar.startOfDay(for: end)
+        for _ in 0..<400 {
+            if seconds(on: day) > 0 {
+                streak += 1
+            } else if streak > 0 {
+                break
+            } else if day < calendar.startOfDay(for: end) {
+                break
+            }
+            guard let previous = calendar.date(byAdding: .day, value: -1, to: day) else { break }
+            day = previous
+        }
+        return streak
+    }
+
+    /// 区间内最活跃的星期（1=周日 … 7=周六）
+    func activeWeekday(in range: DateInterval?) -> Int? {
+        var buckets: [Int: Int] = [:]
+        let source = range == nil ? dailySeconds : dailySeconds.filter { key, _ in
+            guard let date = ReadingStats.date(fromKey: key) else { return false }
+            return range!.contains(date)
+        }
+        for (key, value) in source {
+            guard let date = ReadingStats.date(fromKey: key) else { continue }
+            let weekday = Calendar.current.component(.weekday, from: date)
+            buckets[weekday, default: 0] += value
+        }
+        return buckets.max { $0.value < $1.value }?.key
+    }
+
+    func bestDay(in range: DateInterval?) -> (date: Date, seconds: Int)? {
+        let source = range == nil ? dailySeconds : dailySeconds.filter { key, _ in
+            guard let date = ReadingStats.date(fromKey: key) else { return false }
+            return range!.contains(date)
+        }
+        guard let best = source.max(by: { $0.value < $1.value }),
+              best.value > 0,
+              let date = ReadingStats.date(fromKey: best.key) else { return nil }
+        return (date, best.value)
     }
 
     /// 24 小时累计分布
@@ -156,6 +229,16 @@ final class StatsStore: ObservableObject {
             let hour = Calendar.current.component(.hour, from: date)
             next.hourlySeconds["\(hour)", default: 0] += seconds
             next.dailyBookSeconds[day, default: [:]][key, default: 0] += seconds
+
+            var sessions = next.sessionSeconds
+            sessions.append(seconds)
+            if sessions.count > 200 {
+                sessions.removeFirst(sessions.count - 200)
+            }
+            next.sessionSeconds = sessions
+
+            next.dailyFirstHour[day] = min(next.dailyFirstHour[day] ?? hour, hour)
+            next.dailyLastHour[day] = max(next.dailyLastHour[day] ?? hour, hour)
         }
         if pageTurns > 0 {
             next.bookPageTurns[key, default: 0] += pageTurns
@@ -175,7 +258,11 @@ final class StatsStore: ObservableObject {
         var next = stats
         next.bookOpens[key, default: 0] += 1
         next.dailyOpens[day, default: 0] += 1
+        next.dailyBookOpens[day, default: [:]][key, default: 0] += 1
         next.lastRead[key] = date
+        let hour = Calendar.current.component(.hour, from: date)
+        next.dailyFirstHour[day] = min(next.dailyFirstHour[day] ?? hour, hour)
+        next.dailyLastHour[day] = max(next.dailyLastHour[day] ?? hour, hour)
         stats = next
         scheduleSave()
     }
@@ -200,6 +287,21 @@ final class StatsStore: ObservableObject {
             for (book, value) in map {
                 next.dailyBookSeconds[day, default: [:]][book, default: 0] += value
             }
+        }
+        for (day, map) in other.dailyBookOpens {
+            for (book, value) in map {
+                next.dailyBookOpens[day, default: [:]][book, default: 0] += value
+            }
+        }
+        for (key, value) in other.dailyFirstHour {
+            next.dailyFirstHour[key] = min(next.dailyFirstHour[key] ?? value, value)
+        }
+        for (key, value) in other.dailyLastHour {
+            next.dailyLastHour[key] = max(next.dailyLastHour[key] ?? value, value)
+        }
+        next.sessionSeconds.append(contentsOf: other.sessionSeconds)
+        if next.sessionSeconds.count > 200 {
+            next.sessionSeconds.removeFirst(next.sessionSeconds.count - 200)
         }
         for (key, value) in other.lastRead {
             if let existing = next.lastRead[key] {
