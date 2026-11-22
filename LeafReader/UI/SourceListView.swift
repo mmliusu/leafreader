@@ -9,6 +9,9 @@ struct SourceListView: View {
     @State private var showPaste = false
     @State private var pastedText = ""
     @State private var alertMessage: String?
+    @State private var showLink = false
+    @State private var linkText = ""
+    @State private var importingLink = false
 
     var body: some View {
         NavigationStack {
@@ -49,6 +52,11 @@ struct SourceListView: View {
                             Label("从文件导入", systemImage: "doc.badge.plus")
                         }
                         Button {
+                            showLink = true
+                        } label: {
+                            Label("从链接导入", systemImage: "link")
+                        }
+                        Button {
                             showPaste = true
                         } label: {
                             Label("粘贴 JSON", systemImage: "doc.on.clipboard")
@@ -72,6 +80,9 @@ struct SourceListView: View {
             }
             .sheet(isPresented: $showPaste) {
                 pasteSheet
+            }
+            .sheet(isPresented: $showLink) {
+                linkSheet
             }
             .alert("书源", isPresented: Binding(
                 get: { alertMessage != nil },
@@ -134,6 +145,67 @@ struct SourceListView: View {
                         .disabled(pastedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 }
+        }
+    }
+
+    private var linkSheet: some View {
+        NavigationStack {
+            Form {
+                Section("书源 JSON 地址") {
+                    TextField("https://…/shuyuan.json", text: $linkText)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                }
+                Section {
+                    Text("支持单个书源或书源合集的 JSON 地址。下载后会自动解析并加入书源列表。")
+                        .font(AppFont.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("从链接导入")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") { showLink = false }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if importingLink {
+                        ProgressView()
+                    } else {
+                        Button("导入") { importLink() }
+                            .disabled(linkText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+            }
+        }
+    }
+
+    private func importLink() {
+        let text = linkText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: text) else {
+            alertMessage = "链接格式不正确"
+            return
+        }
+        importingLink = true
+        Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                await MainActor.run {
+                    let count = sourceStore.importData(data)
+                    importingLink = false
+                    showLink = false
+                    linkText = ""
+                    alertMessage = count > 0
+                        ? "已导入 \(count) 个书源"
+                        : (sourceStore.lastError ?? "没有解析到书源")
+                }
+            } catch {
+                await MainActor.run {
+                    importingLink = false
+                    alertMessage = "下载失败：\(error.localizedDescription)"
+                }
+            }
         }
     }
 
