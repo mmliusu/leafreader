@@ -351,9 +351,9 @@ struct ShelfTopSection: View {
                 .foregroundStyle(ShelfStyle.secondaryText(scheme))
 
             HStack(spacing: 10) {
-                metric(ReadingStats.formatted(seconds), "阅读时长")
+                metric(StatsStore.formatted(seconds), "阅读时长")
                 metric("\(turns)", "翻页")
-                metric(ReadingStats.formattedChars(chars), "字数")
+                metric(StatsStore.formattedChars(chars), "字数")
             }
         }
         .padding(12)
@@ -379,7 +379,7 @@ struct ShelfTopSection: View {
 
     private func durationText(for book: Book) -> String {
         let seconds = StatsStore.shared.seconds(for: book.id)
-        return seconds > 0 ? "共 " + ReadingStats.formatted(seconds) : "还没开始"
+        return seconds > 0 ? "共 " + StatsStore.formatted(seconds) : "还没开始"
     }
 }
 
