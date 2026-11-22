@@ -198,33 +198,64 @@ enum RuleEngine {
 
     private static func splitIndex(_ raw: String) -> (String, Index?) {
         guard let dot = raw.lastIndex(of: ".") else { return (raw, nil) }
-        let tail = String(raw[raw.index(after: dot)...])
+        let tail = String(raw[raw.index(after: dot)...]).trimmingCharacters(in: .whitespaces)
+        guard !tail.isEmpty else { return (raw, nil) }
+        let head = String(raw[..<dot])
+
         if tail.hasPrefix("!") {
             let numbers = tail.dropFirst()
                 .split(separator: ":")
                 .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
-            return (String(raw[..<dot]), .exclude(numbers))
+            return (head, .exclude(numbers))
+        }
+        if tail.contains(":") {
+            let parts = tail.split(separator: ":", omittingEmptySubsequences: false)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+            guard parts.count == 2,
+                  let start = Int(parts[0]), let end = Int(parts[1]) else { return (raw, nil) }
+            return (head, .range(start, end))
+        }
+        if tail.contains(",") {
+            let numbers = tail.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+            guard !numbers.isEmpty else { return (raw, nil) }
+            return (head, .multi(numbers))
         }
         if let value = Int(tail) {
-            return (String(raw[..<dot]), .single(value))
+            return (head, .single(value))
         }
         return (raw, nil)
     }
 
     private enum Index {
         case single(Int)
+        /// 区间，含起点不含终点（Legado 的 `0:3`）
+        case range(Int, Int)
+        case multi([Int])
         case exclude([Int])
     }
 
     private static func applyIndex(_ nodes: [Element], _ index: Index?) -> [Element] {
         guard let index = index else { return nodes }
+        func position(_ value: Int) -> Int {
+            value < 0 ? nodes.count + value : value
+        }
         switch index {
         case .single(let value):
-            let position = value < 0 ? nodes.count + value : value
-            guard position >= 0, position < nodes.count else { return [] }
-            return [nodes[position]]
+            let target = position(value)
+            guard target >= 0, target < nodes.count else { return [] }
+            return [nodes[target]]
+        case .range(let start, let end):
+            let lower = max(0, min(nodes.count, position(start)))
+            let upper = max(lower, min(nodes.count, position(end)))
+            guard lower < upper else { return [] }
+            return Array(nodes[lower..<upper])
+        case .multi(let values):
+            return values.compactMap { value in
+                let target = position(value)
+                return target >= 0 && target < nodes.count ? nodes[target] : nil
+            }
         case .exclude(let values):
-            let excluded = Set(values.map { $0 < 0 ? nodes.count + $0 : $0 })
+            let excluded = Set(values.map(position))
             var result: [Element] = []
             for (offset, element) in nodes.enumerated() where !excluded.contains(offset) {
                 result.append(element)
@@ -340,19 +371,54 @@ enum RuleEngine {
     // MARK: - 模板与工具
 
     static func expand(_ rule: String, vars: [String: String], node: Any? = nil) -> String {
-        guard rule.contains("{{") else { return rule }
-        var result = rule
-        guard let regex = try? NSRegularExpression(pattern: "\\{\\{([^}]*)\\}\\}") else { return rule }
-        let matches = regex.matches(in: rule, range: NSRange(rule.startIndex..<rule.endIndex, in: rule))
+        guard rule.contains("{{") || rule.contains("<") else { return rule }
+        var working = rule
+        if let pageText = vars["page"], let page = Int(pageText) {
+            working = resolvePageSets(working, page: page)
+        }
+        guard working.contains("{{") else { return working }
+        var result = working
+        guard let regex = try? NSRegularExpression(pattern: "\\{\\{([^}]*)\\}\\}") else { return working }
+        let matches = regex.matches(in: working, range: NSRange(working.startIndex..<working.endIndex, in: working))
         for match in matches {
-            guard let fullRange = Range(match.range, in: rule),
-                  let exprRange = Range(match.range(at: 1), in: rule) else { continue }
-            let token = String(rule[fullRange])
-            let expr = String(rule[exprRange]).trimmingCharacters(in: .whitespaces)
+            guard let fullRange = Range(match.range, in: working),
+                  let exprRange = Range(match.range(at: 1), in: working) else { continue }
+            let token = String(working[fullRange])
+            let expr = String(working[exprRange]).trimmingCharacters(in: .whitespaces)
             let value = inlineValue(expr, vars: vars, node: node)
             result = result.replacingOccurrences(of: token, with: value)
         }
         return result
+    }
+
+    /// Legado 的分页备选写法：`/dsyq/index<,_{{page}}>.html`
+    /// 第 1 页取第一个备选（空），第 2 页取第二个，越界时停在最后一个。
+    private static func resolvePageSets(_ text: String, page: Int) -> String {
+        guard text.contains("<"), text.contains(",") else { return text }
+        let source = text as NSString
+        guard let regex = try? NSRegularExpression(pattern: "<([^<>\\s]{1,64})>") else { return text }
+        let matches = regex.matches(in: text, range: NSRange(location: 0, length: source.length))
+        guard !matches.isEmpty else { return text }
+
+        var out = ""
+        var cursor = 0
+        for match in matches {
+            let innerRange = match.range(at: 1)
+            guard innerRange.location != NSNotFound else { continue }
+            let inner = source.substring(with: innerRange)
+            guard inner.contains("{{") || inner.contains("_") else { continue }
+            let parts = inner.components(separatedBy: ",")
+            guard parts.count > 1 else { continue }
+            let index = min(max(page - 1, 0), parts.count - 1)
+            let prefixLength = match.range.location - cursor
+            guard prefixLength >= 0 else { continue }
+            out += source.substring(with: NSRange(location: cursor, length: prefixLength))
+            out += parts[index]
+            cursor = match.range.location + match.range.length
+        }
+        guard cursor > 0 else { return text }
+        out += source.substring(from: cursor)
+        return out
     }
 
     private static func inlineValue(_ expr: String, vars: [String: String], node: Any?) -> String {

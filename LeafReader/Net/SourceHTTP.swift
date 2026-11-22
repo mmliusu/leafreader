@@ -2,11 +2,13 @@ import Foundation
 
 /// Legado 的「URL,选项 JSON」写法，例如：
 /// `https://a.com/api,{"method":"POST","headers":{"X":"1"},"body":"k=1"}`
+/// 选项里的 `charset` 决定请求体的编码与响应解码，GB2312/GBK 站点必须靠它。
 struct SourceRequest {
     var url: URL
     var method: String
     var headers: [String: String]
     var body: Data?
+    var charsetName: String?
 
     init?(raw: String, base: String? = nil) {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -27,6 +29,7 @@ struct SourceRequest {
         guard let resolved = SourceRequest.resolveURL(urlText, base: base) else { return nil }
         url = resolved
         method = ((options["method"] as? String) ?? "GET").uppercased()
+        charsetName = options["charset"] as? String
 
         if let rawHeaders = options["headers"] as? [String: Any] {
             var headers: [String: String] = [:]
@@ -38,12 +41,16 @@ struct SourceRequest {
             self.headers = [:]
         }
 
+        let encoding = SourceHTTP.encoding(named: charsetName) ?? .utf8
         if let body = options["body"] as? String {
-            self.body = body.data(using: .utf8)
+            self.body = body.data(using: encoding) ?? body.data(using: .utf8)
         } else if let body = options["body"] as? [String: Any] {
             self.body = try? JSONSerialization.data(withJSONObject: body)
         } else {
             self.body = nil
+        }
+        if self.body != nil, charsetName == nil {
+            charsetName = "UTF-8"
         }
     }
 
@@ -60,6 +67,27 @@ struct SourceRequest {
 
 enum SourceHTTP {
     static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+
+    /// 把 charset 名字映射成 Foundation 编码。GB2312/GBK/GB18030 统一用 GB18030，
+    /// 它是 GB2312 的超集，解码结果一致且不会因生僻字报错。
+    static func encoding(named name: String?) -> String.Encoding? {
+        guard let raw = name?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !raw.isEmpty else {
+            return nil
+        }
+        if raw.contains("gb") || raw.contains("2312") || raw.contains("18030") {
+            return TextDecoder.gb18030
+        }
+        if raw.contains("big5") {
+            return TextDecoder.big5
+        }
+        if raw.contains("utf-8") || raw.contains("utf8") {
+            return .utf8
+        }
+        if raw.contains("utf-16") || raw.contains("utf16") {
+            return .utf16
+        }
+        return nil
+    }
 
     /// 书源 header 字段是 JSON 字符串，合并到每个请求上。
     static func sourceHeaders(_ source: BookSource?) -> [String: String] {
@@ -87,9 +115,55 @@ enum SourceHTTP {
         for (key, value) in headers { urlRequest.setValue(value, forHTTPHeaderField: key) }
 
         if request.body != nil, urlRequest.value(forHTTPHeaderField: "Content-Type") == nil {
-            urlRequest.setValue("application/x-www-form-urlencoded; charset=UTF-8", forHTTPHeaderField: "Content-Type")
+            let charset = request.charsetName?.isEmpty == false ? request.charsetName! : "UTF-8"
+            urlRequest.setValue(
+                "application/x-www-form-urlencoded; charset=\(charset)",
+                forHTTPHeaderField: "Content-Type"
+            )
         }
         return urlRequest
+    }
+
+    /// 响应解码：显式 charset → <meta charset> → Content-Type → UTF-8 → 中文本地编码兜底。
+    static func decode(_ data: Data, charsetName: String?, contentType: String? = nil) -> String {
+        if let encoding = encoding(named: charsetName),
+           let text = String(data: data, encoding: encoding), !text.isEmpty {
+            return text
+        }
+        if let declared = declaredCharset(in: data), let encoding = encoding(named: declared),
+           let text = String(data: data, encoding: encoding), !text.isEmpty {
+            return text
+        }
+        if let declared = headerCharset(contentType), let encoding = encoding(named: declared),
+           let text = String(data: data, encoding: encoding), !text.isEmpty {
+            return text
+        }
+        if let text = String(data: data, encoding: .utf8), !text.isEmpty {
+            return text
+        }
+        return TextDecoder.decode(data)
+    }
+
+    /// 从 HTML 头部字节里嗅探 `charset=gb2312` 这类声明（声明本身是 ASCII，可安全按 latin1 读）。
+    static func declaredCharset(in data: Data) -> String? {
+        let head = data.prefix(2048)
+        guard !head.isEmpty, let text = String(data: head, encoding: .isoLatin1) else { return nil }
+        let lowered = text.lowercased()
+        guard let range = lowered.range(of: "charset=") else { return nil }
+        let tail = lowered[range.upperBound...]
+        let value = tail.prefix { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
+        let name = String(value)
+        return name.isEmpty ? nil : name
+    }
+
+    static func headerCharset(_ contentType: String?) -> String? {
+        guard let contentType = contentType?.lowercased(), let range = contentType.range(of: "charset=") else {
+            return nil
+        }
+        let tail = contentType[range.upperBound...]
+        let value = tail.prefix { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
+        let name = String(value)
+        return name.isEmpty ? nil : name
     }
 
     static func fetch(_ request: SourceRequest, source: BookSource?, timeout: TimeInterval = 25) async throws -> String {
@@ -100,11 +174,9 @@ enum SourceHTTP {
         let session = URLSession(configuration: configuration)
         defer { session.finishTasksAndInvalidate() }
 
-        let (data, _) = try await session.data(for: urlRequest(for: request, source: source))
-        if let text = String(data: data, encoding: .utf8), !text.isEmpty {
-            return text
-        }
-        return TextDecoder.decode(data)
+        let (data, response) = try await session.data(for: urlRequest(for: request, source: source))
+        let contentType = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type")
+        return decode(data, charsetName: request.charsetName, contentType: contentType)
     }
 
     /// 供 JavaScriptCore 的 java.ajax 使用：在后台线程阻塞等待。
@@ -113,13 +185,10 @@ enum SourceHTTP {
         let semaphore = DispatchSemaphore(value: 0)
         var result = ""
         let session = URLSession(configuration: .default)
-        let task = session.dataTask(with: urlRequest(for: request, source: source)) { data, _, _ in
+        let task = session.dataTask(with: urlRequest(for: request, source: source)) { data, response, _ in
             if let data = data {
-                if let text = String(data: data, encoding: .utf8), !text.isEmpty {
-                    result = text
-                } else {
-                    result = TextDecoder.decode(data)
-                }
+                let contentType = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type")
+                result = decode(data, charsetName: request.charsetName, contentType: contentType)
             }
             semaphore.signal()
         }

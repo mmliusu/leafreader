@@ -65,6 +65,11 @@ enum AppFont {
         return found
     }
 
+    static func invalidate() {
+        cachedChoice = nil
+        cachedName = nil
+    }
+
     static func size(_ value: CGFloat) -> Font {
         let target = value * base / 16
         if let name = resolvedName() {

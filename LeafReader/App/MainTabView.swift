@@ -5,9 +5,9 @@ struct MainTabView: View {
     @EnvironmentObject private var sourceStore: BookSourceStore
     @EnvironmentObject private var settings: ReadingSettings
 
-    @AppStorage("ui.font") private var uiFontRaw = UIFontChoice.jinling.rawValue
-    @AppStorage("ui.base") private var uiBaseRaw = 16.0
     @AppStorage("ui.appearance") private var appearance = "system"
+    @AppStorage(AppFont.fontKey) private var uiFontRaw = UIFontChoice.jinling.rawValue
+    @AppStorage(AppFont.baseKey) private var uiBaseRaw = 16.0
 
     private var colorScheme: ColorScheme? {
         switch appearance {
@@ -22,6 +22,7 @@ struct MainTabView: View {
             LibraryView()
                 .environmentObject(library)
                 .environmentObject(settings)
+                .environmentObject(sourceStore)
                 .tabItem {
                     Label("书架", systemImage: "books.vertical")
                 }
@@ -49,7 +50,14 @@ struct MainTabView: View {
         .preferredColorScheme(colorScheme)
         .toolbarBackground(.visible, for: .tabBar)
         .toolbarBackground(Color(uiColor: .systemBackground), for: .tabBar)
-        .id("\(uiFontRaw)-\(uiBaseRaw)")
+        // 不再用 .id 强制重建：换字体会把 TabView 打回第一个 Tab。
+        // 字号变化由 LeafReaderApp 里读取 @AppStorage 注入的 environment(\.font) 驱动刷新。
+        .onChange(of: uiFontRaw) { _ in
+            AppFont.invalidate()
+        }
+        .onChange(of: uiBaseRaw) { _ in
+            AppFont.invalidate()
+        }
     }
 }
 
