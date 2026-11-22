@@ -262,7 +262,7 @@ enum RuleEngine {
         case "all", "outerhtml":
             return (try? element.outerHtml()) ?? ""
         default:
-            return element.attr(terminal ?? "")
+            return (try? element.attr(terminal ?? "")) ?? ""
         }
     }
 
