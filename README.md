@@ -58,6 +58,20 @@ Application Support/LeafReader/
 - 正文：启动时复制到 `Application Support/LeafReader/Fonts/`，WKWebView 用 `@font-face` + `file://` 引用；因此 `readAccessRoot` 设在应用数据根目录，字体和书籍都能被加载
 - 换字体：把同名 ttf 放进 `LeafReader/Resources/`，改 `AppFont.postScriptName`、`UIAppFonts` 文件名，以及 `ReaderFont.jinling` 的 CSS family
 
+## 书源（网络小说）
+
+支持 Legado / 阅读3.0 的书源 JSON：
+
+- **导入**：书源管理 → 从文件 / 从链接（如 `https://…/shuyuan/json/id/xxxx.json`）/ 粘贴 JSON
+- **链路**：多源并发搜索（每批 4 个）→ 详情页 → 目录（支持分页）→ 正文（支持下一页）→ 加入书架 → 在线阅读
+- **下载缓存**：详情页「下载全本」按批抓取并存成 `Books/<id>/chapters/00001.html`，读过的章节自动缓存，可离线
+- **规则支持**：
+  - CSS 选择器，含 `class.list.0@tag.li` / `id.box@a@href` 三段式写法、`!0` 排除、负索引、`-` 反序
+  - `##正则##替换`、`{{key}}` / `{{page}}` / `{{$.字段}}` 模板
+  - JSONPath：`$.a.b[*]`、`$..key`、`$.a[0].b`
+  - `@js:`（JavaScriptCore）+ `jsLib` 注入，提供 `java.ajax`、`java.base64Encode/Decode`、`java.md5Encode`、`java.timeFormat`、`java.log` 等子集
+- **未支持**：XPath 规则；依赖 Android 设备指纹 / 私有签名协议 / 已过期的私有书源（这类源在 Legado 外本来也无法使用）
+
 ## 构建
 
 推送到 `main` 或手动触发 **Build** workflow，约 3–6 分钟后在运行页面的 Artifacts 里下载：
