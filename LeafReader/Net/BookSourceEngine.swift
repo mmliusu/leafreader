@@ -49,6 +49,16 @@ enum BookSourceEngine {
         guard let result = try? await loadPage(target, source: source),
               let rule = source.ruleSearch else { return [] }
 
+        return parseBookList(rule, page: result, source: source, vars: &vars)
+    }
+
+
+    static func parseBookList(
+        _ rule: BookListRule,
+        page result: SourcePage,
+        source: BookSource,
+        vars: inout [String: String]
+    ) -> [SourceSearchResult] {
         let base = result.url.absoluteString
         let nodes = RuleEngine.list(
             rule.bookList ?? "",
@@ -89,6 +99,44 @@ enum BookSourceEngine {
             if items.count >= 60 { break }
         }
         return items
+    }
+
+    // MARK: - 发现
+
+    static func categories(for source: BookSource) -> [ExploreCategory] {
+        guard let raw = source.exploreUrl, !raw.isEmpty else { return [] }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmed.hasPrefix("["),
+           let data = trimmed.data(using: .utf8),
+           let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            var result: [ExploreCategory] = []
+            for (offset, item) in array.enumerated() {
+                guard let title = item["title"] as? String, !title.isEmpty else { continue }
+                let url = (item["url"] as? String) ?? ""
+                result.append(ExploreCategory(index: offset, title: title, url: url))
+            }
+            return result
+        }
+
+        var result: [ExploreCategory] = []
+        for (offset, line) in trimmed.components(separatedBy: "\n").enumerated() {
+            let text = line.trimmingCharacters(in: .whitespaces)
+            guard !text.isEmpty else { continue }
+            let parts = text.components(separatedBy: "::")
+            guard parts.count >= 2 else { continue }
+            result.append(ExploreCategory(index: offset, title: parts[0], url: parts[1]))
+        }
+        return result
+    }
+
+    static func exploreBooks(source: BookSource, category: ExploreCategory, page: Int) async -> [SourceSearchResult] {
+        guard !category.url.isEmpty else { return [] }
+        var vars: [String: String] = ["page": "\(page)", "key": ""]
+        let target = RuleEngine.expand(category.url, vars: vars)
+        guard let result = try? await loadPage(target, source: source) else { return [] }
+        guard let rule = source.ruleExplore ?? source.ruleSearch else { return [] }
+        return parseBookList(rule, page: result, source: source, vars: &vars)
     }
 
     // MARK: - 详情 + 目录

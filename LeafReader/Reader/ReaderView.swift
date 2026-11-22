@@ -8,6 +8,7 @@ struct ReaderView: View {
     @State private var showMenu = true
     @State private var showTOC = false
     @State private var showSettings = false
+    @State private var showSwitch = false
 
     init(book: Book) {
         _model = StateObject(wrappedValue: ReaderViewModel(book: book))
@@ -44,6 +45,14 @@ struct ReaderView: View {
         .sheet(isPresented: $showSettings) {
             ReaderSettingsSheet()
                 .environmentObject(settings)
+        }
+        .sheet(isPresented: $showSwitch) {
+            SourceSwitchView(
+                bookTitle: model.book.title,
+                excludeSourceID: model.book.sourceID ?? ""
+            ) { result in
+                performSwitch(result)
+            }
         }
         .alert("章节加载失败", isPresented: Binding(
             get: { model.chapterError != nil },
@@ -236,6 +245,13 @@ struct ReaderView: View {
                         Label("目录", systemImage: "list.bullet")
                     }
                 }
+                if model.book.isNetworkBook {
+                    Button {
+                        showSwitch = true
+                    } label: {
+                        Label("换源", systemImage: "arrow.left.arrow.right")
+                    }
+                }
                 Button {
                     toggleMenu()
                 } label: {
@@ -249,6 +265,28 @@ struct ReaderView: View {
         .padding(.top, 16)
         .padding(.bottom, 26)
         .background(.ultraThinMaterial)
+    }
+
+    private func performSwitch(_ result: SourceSearchResult) {
+        showSwitch = false
+        guard let source = BookSourceStore.shared.source(id: result.sourceID) else { return }
+        Task {
+            guard let detail = try? await BookSourceEngine.detail(
+                source: source,
+                bookUrl: result.bookUrl,
+                keyword: result.name,
+                fallback: result
+            ) else { return }
+            await MainActor.run {
+                let title = model.currentSection?.title ?? ""
+                _ = LibraryStore.shared.switchSource(
+                    book: model.book,
+                    to: detail,
+                    currentChapterTitle: title
+                )
+                dismiss()
+            }
+        }
     }
 
     private func toggleMenu() {

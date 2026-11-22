@@ -217,6 +217,34 @@ final class LibraryStore: ObservableObject {
         }
     }
 
+    @discardableResult
+    func switchSource(book: Book, to detail: SourceBookDetail, currentChapterTitle: String) -> Int {
+        guard let index = books.firstIndex(where: { $0.id == book.id }) else { return 0 }
+
+        ChapterCache.clear(bookID: book.id)
+        let fileName = book.chaptersFileName ?? "chapters.json"
+        if let data = try? JSONEncoder().encode(detail.chapters) {
+            try? data.write(
+                to: directory(for: book).appendingPathComponent(fileName),
+                options: .atomic
+            )
+        }
+
+        books[index].sourceID = detail.source.bookSourceUrl
+        books[index].bookUrl = detail.bookUrl
+        books[index].chaptersFileName = fileName
+        books[index].chapterCount = detail.chapters.count
+        books[index].coverURLString = detail.coverUrl ?? books[index].coverURLString
+
+        let matched = detail.chapters.firstIndex { chapter in
+            guard !currentChapterTitle.isEmpty else { return false }
+            return chapter.title.contains(currentChapterTitle) || currentChapterTitle.contains(chapter.title)
+        } ?? 0
+        books[index].locator = ReadingLocator(overall: 0, chapterIndex: matched, chapterProgress: 0, pageIndex: 0)
+        saveIndex()
+        return matched
+    }
+
     // MARK: - 更新
 
     func updateLocator(_ locator: ReadingLocator, for bookID: UUID) {

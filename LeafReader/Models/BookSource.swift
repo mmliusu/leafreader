@@ -93,6 +93,14 @@ struct SourceSearchResult: Identifiable, Equatable {
     var bookUrl: String
 }
 
+/// 发现页分类
+struct ExploreCategory: Identifiable, Equatable {
+    var index: Int
+    var title: String
+    var url: String
+    var id: String { "\(index)|\(title)" }
+}
+
 /// 网络书章节
 struct SourceChapter: Identifiable, Equatable, Codable {
     var id: Int

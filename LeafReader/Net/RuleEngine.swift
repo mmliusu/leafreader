@@ -57,6 +57,11 @@ enum RuleEngine {
             return reversed ? Array(items.reversed()) : items
         }
 
+        if isXPath(text), let document = html {
+            let items = XPathEngine.evaluate(text, in: document)
+            return reversed ? Array(items.reversed()) : items
+        }
+
         guard let document = html else { return [] }
         let rootElements: [Element] = [document]
         let (nodes, _) = select(text, from: rootElements)
@@ -129,6 +134,11 @@ enum RuleEngine {
         if isJSONPath(text) {
             let root: Any = node ?? [String: Any]()
             let items = JSONPath.query(text, root: root)
+            return items.map(describe).joined(separator: "\n")
+        }
+
+        if isXPath(text), let document = html ?? (node as? Document) {
+            let items = XPathEngine.evaluate(text, in: document)
             return items.map(describe).joined(separator: "\n")
         }
 
@@ -388,6 +398,11 @@ enum RuleEngine {
         return text
     }
 
+    static func isXPath(_ rule: String) -> Bool {
+        let trimmed = rule.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("@xpath:") || trimmed.hasPrefix("@XPath:") || trimmed.hasPrefix("/")
+    }
+
     static func isJSONPath(_ rule: String) -> Bool {
         let trimmed = rule.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.hasPrefix("@json:")
@@ -397,6 +412,7 @@ enum RuleEngine {
     }
 
     private static func describe(_ value: Any) -> String {
+        if let element = value as? Element { return element.text() }
         if let string = value as? String { return string }
         if let number = value as? NSNumber { return number.stringValue }
         if let dict = value as? [String: Any] {

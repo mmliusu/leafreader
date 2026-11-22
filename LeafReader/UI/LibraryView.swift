@@ -8,6 +8,7 @@ struct LibraryView: View {
     @State private var showImporter = false
     @State private var showSearch = false
     @State private var showSources = false
+    @State private var showExplore = false
     @State private var openedBook: Book?
     @State private var pendingDelete: Book?
     @State private var showError = false
@@ -36,6 +37,11 @@ struct LibraryView: View {
                             Label("搜书", systemImage: "magnifyingglass")
                         }
                         Button {
+                            showExplore = true
+                        } label: {
+                            Label("发现", systemImage: "safari")
+                        }
+                        Button {
                             showSources = true
                         } label: {
                             Label("书源管理", systemImage: "server.rack")
@@ -54,6 +60,10 @@ struct LibraryView: View {
         }
         .sheet(isPresented: $showSearch) {
             SourceSearchView()
+                .environmentObject(library)
+        }
+        .sheet(isPresented: $showExplore) {
+            SourceExploreView()
                 .environmentObject(library)
         }
         .sheet(isPresented: $showSources) {
