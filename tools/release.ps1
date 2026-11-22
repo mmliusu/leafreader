@@ -29,6 +29,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "==> 推送" -ForegroundColor Cyan
+$headSha = (git -C $root rev-parse HEAD).Trim()
 git -C $root -c "http.https://ghproxy.net/.extraheader=Authorization: Basic $auth" push origin main
 if ($LASTEXITCODE -ne 0) { throw "推送失败" }
 
@@ -39,13 +40,18 @@ $deadline = (Get-Date).AddMinutes(20)
 $run = $null
 while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 8
-    $runs = Invoke-RestMethod -Uri "$api/actions/runs?per_page=1" -Headers $headers
-    $candidate = $runs.workflow_runs | Select-Object -First 1
-    if (-not $candidate) { continue }
+    $runs = Invoke-RestMethod -Uri "$api/actions/runs?per_page=10" -Headers $headers
+    # 必须匹配本次提交，否则会拿到上一次成功的旧产物
+    $candidate = $runs.workflow_runs | Where-Object { $_.head_sha -eq $headSha } | Select-Object -First 1
+    if (-not $candidate) {
+        Write-Host "    等待构建任务创建…"
+        continue
+    }
     if ($candidate.status -eq 'completed') { $run = $candidate; break }
     Write-Host ("    状态: {0}" -f $candidate.status)
 }
 if (-not $run) { throw "等待超时" }
+if ($run.head_sha -ne $headSha) { throw "拿到的构建不是本次提交，已中止" }
 
 if ($run.conclusion -ne 'success') {
     throw "构建失败（$($run.conclusion)）：$($run.html_url)"

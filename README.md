@@ -6,13 +6,11 @@
 
 iOS 的 `.ipa` 只能由 macOS 上的 Xcode 工具链产出，而开发机是 Windows。所以采用：
 
-- **Windows 上写代码**：VS Code + Git + GitHub CLI
-- **GitHub Actions 的 macOS runner 编译**：`xcodegen` 生成工程 → `xcodebuild` 编译 → 打包未签名 `.ipa`
-- **手机上用 Sideloadly 个人签名安装**（7 天续签一次）
+-   **Windows 上写代码**：VS Code + Git + GitHub CLI
+-   **GitHub Actions 的 macOS runner 编译**：`xcodegen` 生成工程 → `xcodebuild` 编译 → 打包未签名 `.ipa`
+-   **手机上用 Sideloadly 个人签名安装**（7 天续签一次）
 
-工程文件（`.xcodeproj`）不入库，统一由 `project.yml` 通过 [XcodeGen] 生成，这样 Windows 上不需要维护 pbxproj。
-
-[XcodeGen]: https://github.com/yonaskolb/XcodeGen
+工程文件（`.xcodeproj`）不入库，统一由 `project.yml` 通过 [XcodeGen](https://github.com/yonaskolb/XcodeGen) 生成，这样 Windows 上不需要维护 pbxproj。
 
 ## 目录结构
 
@@ -37,6 +35,8 @@ LeafReader/
 tools/
   make_icon.ps1              # 重新生成 1024 图标
   check_sources.py           # 无 Mac 时的离线静态检查
+
+
 ```
 
 ## 数据存放
@@ -48,53 +48,55 @@ Application Support/LeafReader/
   Books/<UUID>/cover.jpg     # EPUB 封面（可选）
   Books/<UUID>/text/         # TXT 拆分后的 HTML 缓存
   Books/<UUID>/epub/         # EPUB 解压目录
+
+
 ```
 
 ## 内置字体
 
 `LeafReader/Resources/FZXiJinLing.ttf`（方正细金陵简体）随 App 打包，界面与正文都用它：
 
-- 界面：`Info.plist` 的 `UIAppFonts` 注册，`AppFont` 统一字号体系（`FZXIJINLJW--GB1-0`）
-- 正文：启动时复制到 `Application Support/LeafReader/Fonts/`，WKWebView 用 `@font-face` + `file://` 引用；因此 `readAccessRoot` 设在应用数据根目录，字体和书籍都能被加载
-- 换字体：把同名 ttf 放进 `LeafReader/Resources/`，改 `AppFont.postScriptName`、`UIAppFonts` 文件名，以及 `ReaderFont.jinling` 的 CSS family
+-   界面：`Info.plist` 的 `UIAppFonts` 注册，`AppFont` 统一字号体系（`FZXIJINLJW--GB1-0`）
+-   正文：启动时复制到 `Application Support/LeafReader/Fonts/`，WKWebView 用 `@font-face` + `file://` 引用；因此 `readAccessRoot` 设在应用数据根目录，字体和书籍都能被加载
+-   换字体：把同名 ttf 放进 `LeafReader/Resources/`，改 `AppFont.postScriptName`、`UIAppFonts` 文件名，以及 `ReaderFont.jinling` 的 CSS family
 
 ## 书源（网络小说）
 
 支持 Legado / 阅读3.0 的书源 JSON：
 
-- **导入**：书源管理 → 从文件 / 从链接（如 `https://…/shuyuan/json/id/xxxx.json`）/ 粘贴 JSON
-- **链路**：多源并发搜索（每批 4 个）→ 详情页 → 目录（支持分页）→ 正文（支持下一页）→ 加入书架 → 在线阅读
-- **下载缓存**：详情页「下载全本」按批抓取并存成 `Books/<id>/chapters/00001.html`，读过的章节自动缓存，可离线
-- **规则支持**：
-  - CSS 选择器，含 `class.list.0@tag.li` / `id.box@a@href` 三段式写法、`!0` 排除、负索引、`-` 反序
-  - `##正则##替换`、`{{key}}` / `{{page}}` / `{{$.字段}}` 模板
-  - JSONPath：`$.a.b[*]`、`$..key`、`$.a[0].b`
-  - `@js:`（JavaScriptCore）+ `jsLib` 注入，提供 `java.ajax`、`java.base64Encode/Decode`、`java.md5Encode`、`java.timeFormat`、`java.log` 等子集
-- **未支持**：XPath 规则；依赖 Android 设备指纹 / 私有签名协议 / 已过期的私有书源（这类源在 Legado 外本来也无法使用）
-
+-   **导入**：书源管理 → 从文件 / 从链接（如 `https://…/shuyuan/json/id/xxxx.json`）/ 粘贴 JSON
+-   **链路**：多源并发搜索（每批 4 个）→ 详情页 → 目录（支持分页）→ 正文（支持下一页）→ 加入书架 → 在线阅读
+-   **下载缓存**：详情页「下载全本」按批抓取并存成 `Books/<id>/chapters/00001.html`，读过的章节自动缓存，可离线
+-   **规则支持**：
+    -   CSS 选择器，含 `class.list.0@tag.li` / `id.box@a@href` 三段式写法、`!0` 排除、负索引、`-` 反序
+    -   `##正则##替换`、`{{key}}` / `{{page}}` / `{{$.字段}}` 模板
+    -   JSONPath：`$.a.b[*]`、`$..key`、`$.a[0].b`
+    -   `@js:`（JavaScriptCore）+ `jsLib` 注入，提供 `java.ajax`、`java.base64Encode/Decode`、`java.md5Encode`、`java.timeFormat`、`java.log` 等子集
+-   **未支持**：XPath 规则；依赖 Android 设备指纹 / 私有签名协议 / 已过期的私有书源（这类源在 Legado 外本来也无法使用）
 
 ## 界面结构
 
 底部四个 Tab：
 
-- **书架**：网格、排序（最近阅读/添加/书名/作者/进度/时长）、书名作者搜索、全文检索入口、本地导入
-- **书源**：导入（文件/链接/粘贴）、分组、开关、删除
-- **统计**：总/日/周/月/年分栏；阅读时长、书籍数、翻页次数、阅读字数；总览里有最近 7 天、30 天柱状图与阅读时长 Top 10
-- **我的**：数据概览、本地备份导出/导入、坚果云 WebDAV 同步
+-   **书架**：网格、排序（最近阅读/添加/书名/作者/进度/时长）、书名作者搜索、全文检索入口、本地导入
+-   **书源**：导入（文件/链接/粘贴）、分组、开关、删除
+-   **统计**：总/日/周/月/年分栏；阅读时长、书籍数、翻页次数、阅读字数；总览里有最近 7 天、30 天柱状图与阅读时长 Top 10
+-   **我的**：数据概览、本地备份导出/导入、坚果云 WebDAV 同步
 
 ## 数据同步
 
 备份文件只含元数据（书架条目、进度、书源、书签、统计），不含书籍文件本身：
 
-- 本地：我的 → 导出备份（存到「文件」App）→ 另一台设备 → 从文件导入
-- 云端：坚果云「账户信息 → 安全选项 → 第三方应用管理」生成应用密码，填入我的 → 坚果云 WebDAV，默认服务器 `https://dav.jianguoyun.com/dav/`
-- 合并策略：书源按 URL 覆盖，书籍按 id 合并进度（取更靠后的），书签按 id 去重，统计按天累加
+-   本地：我的 → 导出备份（存到「文件」App）→ 另一台设备 → 从文件导入
+-   云端：坚果云「账户信息 → 安全选项 → 第三方应用管理」生成应用密码，填入我的 → 坚果云 WebDAV，默认服务器 `https://dav.jianguoyun.com/dav/`
+-   合并策略：书源按 URL 覆盖，书籍按 id 合并进度（取更靠后的），书签按 id 去重，统计按天累加
+
 ## 构建
 
 推送到 `main` 或手动触发 **Build** workflow，约 3–6 分钟后在运行页面的 Artifacts 里下载：
 
-- `LeafReader-unsigned-ipa` → `LeafReader-unsigned.ipa`
-- `build-log`（失败时用来看编译报错）
+-   `LeafReader-unsigned-ipa` → `LeafReader-unsigned.ipa`
+-   `build-log`（失败时用来看编译报错）
 
 ## 安装
 
@@ -104,31 +106,31 @@ Windows 上用 Sideloadly 选择 `LeafReader-unsigned.ipa`，用自己的 Apple 
 
 免费 Apple ID 签名不支持：推送通知、iCloud/CloudKit、App Groups、Background Modes 中的多数能力、部分 Keychain 共享。因此本项目：
 
-- 全部数据存本地沙盒，不做云同步
-- 不使用推送、不依赖 iCloud
-- 只使用 Foundation / SwiftUI / PDFKit / WebKit 这些系统框架
+-   全部数据存本地沙盒，不做云同步
+-   不使用推送、不依赖 iCloud
+-   只使用 Foundation / SwiftUI / PDFKit / WebKit 这些系统框架
 
 ## 已实现
 
-- [x] 书架网格、封面、阅读进度展示
-- [x] 导入 TXT / EPUB / PDF（文件选择器，支持多选）
-- [x] 从其他 App「用…打开」导入
-- [x] TXT：编码自动识别、按 6 万字分段、章节列表跳转
-- [x] EPUB：解包、OPF/spine 解析、nav/ncx 目录、章节渲染
-- [x] PDF：PDFKit 连续翻页、页码记忆
-- [x] 阅读进度记忆（章节 + 章内位置 / PDF 页码）
-- [x] 左右翻页模式（页码、点按左右翻页、滑动翻页、翻到章末自动切章）与上下滚动模式可随时切换
-- [x] 排版设置：字号、行距、边距、字体、四套背景主题
-- [x] 点击正文切换沉浸模式
-- [x] 删除书籍、标记未读
-- [x] 全局自定义字体（界面 + 正文），字体可在排版里切换回系统/宋体/楷体/黑体
-- [x] Legado 书源：导入、多源搜索、详情、目录、正文、整本下载缓存
+-   \[x\] 书架网格、封面、阅读进度展示
+-   \[x\] 导入 TXT / EPUB / PDF（文件选择器，支持多选）
+-   \[x\] 从其他 App「用…打开」导入
+-   \[x\] TXT：编码自动识别、按 6 万字分段、章节列表跳转
+-   \[x\] EPUB：解包、OPF/spine 解析、nav/ncx 目录、章节渲染
+-   \[x\] PDF：PDFKit 连续翻页、页码记忆
+-   \[x\] 阅读进度记忆（章节 + 章内位置 / PDF 页码）
+-   \[x\] 左右翻页模式（页码、点按左右翻页、滑动翻页、翻到章末自动切章）与上下滚动模式可随时切换
+-   \[x\] 排版设置：字号、行距、边距、字体、四套背景主题
+-   \[x\] 点击正文切换沉浸模式
+-   \[x\] 删除书籍、标记未读
+-   \[x\] 全局自定义字体（界面 + 正文），字体可在排版里切换回系统/宋体/楷体/黑体
+-   \[x\] Legado 书源：导入、多源搜索、详情、目录、正文、整本下载缓存
 
 ## 后续可做
 
-- [ ] 书签与批注、全文搜索
-- [ ] 阅读统计、书架排序与分组
-- [ ] EPUB 内嵌字体、脚注跳转处理
+-   \[ \] 书签与批注、全文搜索
+-   \[ \] 阅读统计、书架排序与分组
+-   \[ \] EPUB 内嵌字体、脚注跳转处理
 
 ## 本地检查
 
@@ -136,6 +138,8 @@ Windows 上用 Sideloadly 选择 `LeafReader-unsigned.ipa`，用自己的 Apple 
 
 ```powershell
 py -3 tools/check_sources.py
+
+
 ```
 
 它会检查 Swift 源码的括号/字符串平衡与资源完整性，能挡掉大部分低级错误；类型层面的错误以 GitHub Actions 的编译结果为准。
