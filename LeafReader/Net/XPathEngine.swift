@@ -54,7 +54,7 @@ enum XPathEngine {
                 let pool: [Element]
                 switch step.axis {
                 case .descendant:
-                    pool = Array(node.getAllElements())
+                    pool = (try? node.getAllElements()).map { Array($0) } ?? []
                 case .child:
                     pool = Array(node.children())
                 }
