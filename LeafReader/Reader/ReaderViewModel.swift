@@ -24,9 +24,9 @@ final class ReaderViewModel: ObservableObject {
     private var lastPersist = Date.distantPast
     private var pendingSave: DispatchWorkItem?
 
-    init(book: Book) {
+    init(book: Book, initialChapter: Int? = nil) {
         self.book = book
-        self.sectionIndex = max(0, book.locator.chapterIndex)
+        self.sectionIndex = max(0, initialChapter ?? book.locator.chapterIndex)
         self.sectionProgress = min(max(book.locator.chapterProgress, 0), 1)
         self.pdfPageIndex = max(0, book.locator.pageIndex)
         self.pdfPageCount = book.pageCount ?? 0

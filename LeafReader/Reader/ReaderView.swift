@@ -4,6 +4,7 @@ struct ReaderView: View {
     @StateObject private var model: ReaderViewModel
     @EnvironmentObject private var settings: ReadingSettings
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var showMenu = true
     @State private var showTOC = false
@@ -12,9 +13,10 @@ struct ReaderView: View {
     @State private var showBookmarks = false
     @State private var showSearch = false
     @State private var bookmarks: [Bookmark] = []
+    @State private var sessionStart = Date()
 
-    init(book: Book) {
-        _model = StateObject(wrappedValue: ReaderViewModel(book: book))
+    init(book: Book, initialChapter: Int? = nil) {
+        _model = StateObject(wrappedValue: ReaderViewModel(book: book, initialChapter: initialChapter))
     }
 
     var body: some View {
@@ -29,11 +31,20 @@ struct ReaderView: View {
         .animation(.easeInOut(duration: 0.18), value: showMenu)
         .statusBarHidden(!showMenu)
         .onAppear {
+            sessionStart = Date()
             LibraryStore.shared.markOpened(model.book.id)
             model.load()
         }
         .onDisappear {
+            flushSession()
             model.persistNow()
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active {
+                sessionStart = Date()
+            } else {
+                flushSession()
+            }
         }
         .sheet(isPresented: $showTOC) {
             TocSheet(
@@ -291,6 +302,13 @@ struct ReaderView: View {
         .padding(.top, 16)
         .padding(.bottom, 26)
         .background(.ultraThinMaterial)
+    }
+
+    private func flushSession() {
+        let seconds = Int(Date().timeIntervalSince(sessionStart))
+        sessionStart = Date()
+        guard seconds >= 5 else { return }
+        StatsStore.shared.add(seconds: seconds, bookID: model.book.id)
     }
 
     private func jump(to mark: Bookmark) {

@@ -1,6 +1,28 @@
 import SwiftUI
 import UIKit
 
+enum LibrarySort: String, CaseIterable, Identifiable {
+    case recent
+    case added
+    case title
+    case author
+    case progress
+    case duration
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .recent: return "最近阅读"
+        case .added: return "最近添加"
+        case .title: return "书名"
+        case .author: return "作者"
+        case .progress: return "阅读进度"
+        case .duration: return "阅读时长"
+        }
+    }
+}
+
 struct LibraryView: View {
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var settings: ReadingSettings
@@ -9,6 +31,10 @@ struct LibraryView: View {
     @State private var showSearch = false
     @State private var showSources = false
     @State private var showExplore = false
+    @State private var showCrossSearch = false
+    @State private var showStats = false
+    @State private var query = ""
+    @AppStorage("library.sort") private var sortRaw = LibrarySort.recent.rawValue
     @State private var openedBook: Book?
     @State private var pendingDelete: Book?
     @State private var showError = false
@@ -20,7 +46,7 @@ struct LibraryView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if library.sortedBooks.isEmpty {
+                if library.books.isEmpty {
                     emptyState
                 } else {
                     bookGrid
@@ -28,7 +54,30 @@ struct LibraryView: View {
             }
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("书架")
+            .searchable(text: $query, prompt: "搜索书名或作者")
             .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Picker("排序", selection: $sortRaw) {
+                            ForEach(LibrarySort.allCases) { option in
+                                Text(option.title).tag(option.rawValue)
+                            }
+                        }
+                        Divider()
+                        Button {
+                            showCrossSearch = true
+                        } label: {
+                            Label("全文搜索", systemImage: "text.magnifyingglass")
+                        }
+                        Button {
+                            showStats = true
+                        } label: {
+                            Label("阅读统计", systemImage: "chart.bar")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
                         Button {
@@ -60,6 +109,14 @@ struct LibraryView: View {
         }
         .sheet(isPresented: $showSearch) {
             SourceSearchView()
+                .environmentObject(library)
+        }
+        .sheet(isPresented: $showCrossSearch) {
+            CrossBookSearchView()
+                .environmentObject(library)
+        }
+        .sheet(isPresented: $showStats) {
+            StatsView()
                 .environmentObject(library)
         }
         .sheet(isPresented: $showExplore) {
@@ -118,10 +175,37 @@ struct LibraryView: View {
         }
     }
 
+    private var displayedBooks: [Book] {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        let filtered = trimmed.isEmpty
+            ? library.books
+            : library.books.filter {
+                $0.title.localizedCaseInsensitiveContains(trimmed)
+                    || $0.author.localizedCaseInsensitiveContains(trimmed)
+            }
+
+        switch LibrarySort(rawValue: sortRaw) ?? .recent {
+        case .recent:
+            return filtered.sorted { ($0.lastOpenedAt ?? $0.addedAt) > ($1.lastOpenedAt ?? $1.addedAt) }
+        case .added:
+            return filtered.sorted { $0.addedAt > $1.addedAt }
+        case .title:
+            return filtered.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        case .author:
+            return filtered.sorted { $0.author.localizedStandardCompare($1.author) == .orderedAscending }
+        case .progress:
+            return filtered.sorted { $0.progress > $1.progress }
+        case .duration:
+            return filtered.sorted {
+                StatsStore.shared.seconds(for: $0.id) > StatsStore.shared.seconds(for: $1.id)
+            }
+        }
+    }
+
     private var bookGrid: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 22) {
-                ForEach(library.sortedBooks) { book in
+                ForEach(displayedBooks) { book in
                     BookCard(book: book)
                         .onTapGesture {
                             openedBook = book
