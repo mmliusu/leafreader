@@ -9,6 +9,9 @@ struct ReaderView: View {
     @State private var showTOC = false
     @State private var showSettings = false
     @State private var showSwitch = false
+    @State private var showBookmarks = false
+    @State private var showSearch = false
+    @State private var bookmarks: [Bookmark] = []
 
     init(book: Book) {
         _model = StateObject(wrappedValue: ReaderViewModel(book: book))
@@ -52,6 +55,21 @@ struct ReaderView: View {
                 excludeSourceID: model.book.sourceID ?? ""
             ) { result in
                 performSwitch(result)
+            }
+        }
+        .sheet(isPresented: $showBookmarks) {
+            BookmarkListView(
+                bookmarks: bookmarks,
+                onAdd: { model.addBookmarkNow() },
+                onSelect: { mark in jump(to: mark) },
+                onDelete: { mark in
+                    LibraryStore.shared.removeBookmark(id: mark.id, for: model.book)
+                }
+            )
+        }
+        .sheet(isPresented: $showSearch) {
+            BookSearchView(sections: model.document?.sections ?? []) { hit, keyword in
+                model.jump(to: hit, keyword: keyword)
             }
         }
         .alert("章节加载失败", isPresented: Binding(
@@ -232,7 +250,7 @@ struct ReaderView: View {
                 .font(AppFont.subheadline)
             }
 
-            HStack(spacing: 30) {
+            HStack(spacing: 16) {
                 Button {
                     showSettings = true
                 } label: {
@@ -240,9 +258,15 @@ struct ReaderView: View {
                 }
                 if model.book.format != .pdf {
                     Button {
-                        showTOC = true
+                        bookmarks = LibraryStore.shared.bookmarks(for: model.book)
+                        showBookmarks = true
                     } label: {
-                        Label("目录", systemImage: "list.bullet")
+                        Label("书签", systemImage: "bookmark")
+                    }
+                    Button {
+                        showSearch = true
+                    } label: {
+                        Label("搜索", systemImage: "magnifyingglass")
                     }
                 }
                 if model.book.isNetworkBook {
@@ -265,6 +289,10 @@ struct ReaderView: View {
         .padding(.top, 16)
         .padding(.bottom, 26)
         .background(.ultraThinMaterial)
+    }
+
+    private func jump(to mark: Bookmark) {
+        model.jumpTo(chapterIndex: mark.chapterIndex, progress: mark.progress)
     }
 
     private func performSwitch(_ result: SourceSearchResult) {

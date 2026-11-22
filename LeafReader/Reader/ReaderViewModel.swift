@@ -15,6 +15,8 @@ final class ReaderViewModel: ObservableObject {
     @Published var isLoadingChapter = false
     @Published var chapterError: String?
     @Published var reloadToken = 0
+    @Published var highlightTerm = ""
+    @Published var highlightToken = 0
 
     private var loadingIndexes: Set<Int> = []
     @Published var errorMessage: String?
@@ -188,6 +190,39 @@ final class ReaderViewModel: ObservableObject {
         persistNow()
         prepareSection(index)
         return true
+    }
+
+    func jumpTo(chapterIndex: Int, progress: Double) {
+        let target = max(0, min(1, progress))
+        if chapterIndex != sectionIndex {
+            sectionIndex = max(0, chapterIndex)
+        }
+        sectionProgress = target
+        pageIndex = 0
+        pageCount = 0
+        highlightTerm = ""
+        highlightToken += 1
+        reloadToken += 1
+        prepareSection(sectionIndex)
+        persistNow()
+    }
+
+    func jump(to hit: BookSearchHit, keyword: String) {
+        highlightTerm = keyword
+        highlightToken += 1
+        goToSection(hit.chapterIndex)
+    }
+
+    @discardableResult
+    func addBookmarkNow() -> Bookmark {
+        let mark = Bookmark(
+            chapterIndex: sectionIndex,
+            chapterTitle: currentSection?.title ?? "第 \(sectionIndex + 1) 章",
+            progress: sectionProgress,
+            pageIndex: ReadingSettings.shared.pageMode ? pageIndex : 0
+        )
+        LibraryStore.shared.addBookmark(mark, for: book)
+        return mark
     }
 
     func nextSection() {

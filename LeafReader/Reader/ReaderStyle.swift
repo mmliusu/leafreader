@@ -300,6 +300,53 @@ enum ReaderStyle {
 
       window.__leaf = {
         applyConfig: applyConfig,
+        clearMarks: function () {
+          var marks = document.querySelectorAll('mark.leaf-hit');
+          for (var i = 0; i < marks.length; i++) {
+            var mark = marks[i];
+            var parent = mark.parentNode;
+            if (!parent) { continue; }
+            var textNode = document.createTextNode(mark.textContent || '');
+            parent.replaceChild(textNode, mark);
+            parent.normalize();
+          }
+        },
+        findAndScroll: function (term) {
+          if (!term) { return ''; }
+          var query = String(term).toLowerCase();
+          try { window.__leaf.clearMarks(); } catch (e) {}
+          var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+          var node;
+          while ((node = walker.nextNode())) {
+            var value = node.nodeValue || '';
+            var index = value.toLowerCase().indexOf(query);
+            if (index < 0) { continue; }
+            var range = document.createRange();
+            try {
+              range.setStart(node, index);
+              range.setEnd(node, index + query.length);
+            } catch (e) { continue; }
+            var rect = range.getBoundingClientRect();
+            var mark = document.createElement('mark');
+            mark.className = 'leaf-hit';
+            mark.style.backgroundColor = 'rgba(255, 214, 0, 0.55)';
+            mark.style.color = 'inherit';
+            var rest = node.splitText(index);
+            var target = rest.splitText(query.length);
+            var copy = target.cloneNode(true);
+            mark.appendChild(copy);
+            target.parentNode.replaceChild(mark, target);
+            if (mode === 'page') {
+              var left = window.scrollX + rect.left;
+              var page = Math.floor(left / pageStep());
+              window.scrollTo(page * pageStep(), 0);
+            } else {
+              window.scrollTo(0, window.scrollY + rect.top - 100);
+            }
+            return '1';
+          }
+          return '';
+        },
         currentRatio: function () {
           if (mode === 'page') {
             var total = totalPages();

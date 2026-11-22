@@ -158,6 +158,43 @@ final class LibraryStore: ObservableObject {
         return book
     }
 
+    // MARK: - 书签
+
+    private func bookmarksURL(for book: Book) -> URL {
+        directory(for: book).appendingPathComponent("bookmarks.json")
+    }
+
+    func bookmarks(for book: Book) -> [Bookmark] {
+        guard let data = try? Data(contentsOf: bookmarksURL(for: book)) else { return [] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let list = try? decoder.decode([Bookmark].self, from: data) else { return [] }
+        return list.sorted {
+            $0.chapterIndex == $1.chapterIndex
+                ? $0.progress < $1.progress
+                : $0.chapterIndex < $1.chapterIndex
+        }
+    }
+
+    func addBookmark(_ bookmark: Bookmark, for book: Book) {
+        var list = bookmarks(for: book)
+        list.append(bookmark)
+        saveBookmarks(list, for: book)
+    }
+
+    func removeBookmark(id: UUID, for book: Book) {
+        var list = bookmarks(for: book)
+        list.removeAll { $0.id == id }
+        saveBookmarks(list, for: book)
+    }
+
+    private func saveBookmarks(_ list: [Bookmark], for book: Book) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(list) else { return }
+        try? data.write(to: bookmarksURL(for: book), options: .atomic)
+    }
+
     // MARK: - 网络书
 
     @discardableResult

@@ -8,6 +8,8 @@ struct WebReaderView: UIViewRepresentable {
     let css: String
     let pageMode: Bool
     let reloadToken: String
+    let highlightTerm: String
+    let highlightToken: Int
     let restoreRatio: Double
     let resetPosition: Bool
     let onProgress: (Double) -> Void
@@ -62,6 +64,11 @@ struct WebReaderView: UIViewRepresentable {
             return
         }
 
+        if coordinator.lastHighlightToken != highlightToken, !highlightTerm.isEmpty {
+            coordinator.lastHighlightToken = highlightToken
+            coordinator.applyHighlight(on: webView)
+        }
+
         let signature = css + "|" + (pageMode ? "page" : "scroll")
         if coordinator.appliedSignature != signature {
             coordinator.applyConfig(on: webView, restore: coordinator.latestRatio, reset: false)
@@ -83,6 +90,9 @@ struct WebReaderView: UIViewRepresentable {
         var loadedKey: String = ""
         var appliedSignature: String = ""
         var latestRatio: Double = 0
+        var lastHighlightToken: Int = 0
+        var lastTotalPages: Int = 1
+        var lastCurrentPage: Int = 0
 
         init(_ parent: WebReaderView) {
             self.parent = parent
@@ -104,6 +114,22 @@ struct WebReaderView: UIViewRepresentable {
             latestRatio = parent.restoreRatio
             webView.scrollView.isPagingEnabled = parent.pageMode
             applyConfig(on: webView, restore: parent.restoreRatio, reset: parent.resetPosition)
+            if !parent.highlightTerm.isEmpty {
+                lastHighlightToken = parent.highlightToken
+                applyHighlight(on: webView)
+            }
+        }
+
+        func applyHighlight(on webView: WKWebView) {
+            guard !parent.highlightTerm.isEmpty else { return }
+            let escaped = parent.highlightTerm
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "'", with: "\\'")
+                .replacingOccurrences(of: "\n", with: " ")
+            webView.evaluateJavaScript(
+                "window.__leaf && window.__leaf.findAndScroll('\(escaped)');",
+                completionHandler: nil
+            )
         }
 
         func webView(
@@ -137,6 +163,8 @@ struct WebReaderView: UIViewRepresentable {
                 guard let dict = message.body as? [String: Any] else { return }
                 let current = (dict["current"] as? NSNumber)?.intValue ?? (dict["current"] as? Int) ?? 0
                 let total = (dict["total"] as? NSNumber)?.intValue ?? (dict["total"] as? Int) ?? 1
+                lastTotalPages = max(1, total)
+                lastCurrentPage = current
                 parent.onPages(current, total)
             case "chapter":
                 guard let raw = message.body as? String else { return }
@@ -147,8 +175,17 @@ struct WebReaderView: UIViewRepresentable {
                 }
             case "page":
                 let delta = (message.body as? NSNumber)?.intValue ?? 0
-                if delta != 0 {
-                    webView?.evaluateJavaScript("window.__leaf && window.__leaf.goPage(\(delta));", completionHandler: nil)
+                guard delta != 0 else { return }
+                let total = max(1, lastTotalPages)
+                let target = min(total - 1, max(0, lastCurrentPage + delta))
+                if target == lastCurrentPage {
+                    parent.onChapterChange(delta > 0 ? 1 : -1)
+                } else if let webView = webView {
+                    let width = webView.bounds.width
+                    webView.scrollView.setContentOffset(
+                        CGPoint(x: CGFloat(target) * width, y: 0),
+                        animated: true
+                    )
                 }
             case "tap":
                 parent.onTap()
