@@ -27,10 +27,21 @@ enum BookSourceEngine {
 
     // MARK: - 搜索
 
-    static func search(source: BookSource, keyword: String, page: Int = 1) async -> [SourceSearchResult] {
-        guard let template = source.searchUrl, !template.isEmpty else { return [] }
-        var vars: [String: String] = ["key": keyword, "page": "\(page)"]
+    static func searchDetailed(source: BookSource, keyword: String, page: Int = 1) async -> SourceSearchOutcome {
+        func outcome(_ results: [SourceSearchResult], _ error: String? = nil) -> SourceSearchOutcome {
+            SourceSearchOutcome(
+                sourceID: source.bookSourceUrl,
+                sourceName: source.displayName,
+                results: results,
+                errorText: error
+            )
+        }
 
+        guard let template = source.searchUrl, !template.isEmpty else {
+            return outcome([], "书源没有配置搜索地址")
+        }
+
+        var vars: [String: String] = ["key": keyword, "page": "\(page)"]
         var target = template
         if RuleEngine.isJSRule(target) {
             target = JSBridge.shared.evaluate(
@@ -44,12 +55,24 @@ enum BookSourceEngine {
             target = RuleEngine.expand(target, vars: vars)
         }
         target = target.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !target.isEmpty else { return [] }
+        guard !target.isEmpty else {
+            return outcome([], "搜索地址为空（可能是 @js 规则执行失败）")
+        }
 
-        guard let result = try? await loadPage(target, source: source),
-              let rule = source.ruleSearch else { return [] }
+        do {
+            let result = try await loadPage(target, source: source)
+            guard let rule = source.ruleSearch else {
+                return outcome([], "书源没有配置 ruleSearch")
+            }
+            let items = parseBookList(rule, page: result, source: source, vars: &vars)
+            return outcome(items, items.isEmpty ? "没有解析到书籍（规则可能不兼容）" : nil)
+        } catch {
+            return outcome([], error.localizedDescription)
+        }
+    }
 
-        return parseBookList(rule, page: result, source: source, vars: &vars)
+    static func search(source: BookSource, keyword: String, page: Int = 1) async -> [SourceSearchResult] {
+        await searchDetailed(source: source, keyword: keyword, page: page).results
     }
 
 

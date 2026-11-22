@@ -111,6 +111,14 @@ struct SourceChapter: Identifiable, Equatable, Codable {
     var cached: Bool = false
 }
 
+/// 单个书源的搜索诊断结果
+struct SourceSearchOutcome {
+    var sourceID: String
+    var sourceName: String
+    var results: [SourceSearchResult]
+    var errorText: String?
+}
+
 /// 书籍详情（搜索结果 + 详情页补充）
 struct SourceBookDetail {
     var source: BookSource

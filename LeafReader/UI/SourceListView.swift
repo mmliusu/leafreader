@@ -11,6 +11,8 @@ struct SourceListView: View {
     @State private var showPaste = false
     @State private var pastedText = ""
     @State private var alertMessage: String?
+    @State private var showSearch = false
+    @State private var searchSourceID: String?
     @State private var showLink = false
     @State private var linkText = ""
     @State private var importingLink = false
@@ -49,6 +51,15 @@ struct SourceListView: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        searchSourceID = nil
+                        showSearch = true
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                    }
+                    .disabled(sourceStore.sources.isEmpty)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
                         Button {
                             showFilePicker = true
@@ -77,6 +88,10 @@ struct SourceListView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showSearch) {
+                SourceSearchView(restrictSourceID: searchSourceID)
+                    .environmentObject(LibraryStore.shared)
+            }
             .sheet(isPresented: $showFilePicker) {
                 SourceFilePicker(isPresented: $showFilePicker) { urls in
                     importURLs(urls)
@@ -101,15 +116,23 @@ struct SourceListView: View {
 
     private func row(_ source: BookSource) -> some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(source.displayName)
-                    .font(AppFont.body)
-                    .lineLimit(1)
-                Text(source.host)
-                    .font(AppFont.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+            Button {
+                searchSourceID = source.bookSourceUrl
+                showSearch = true
+            } label: {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(source.displayName)
+                        .font(AppFont.body)
+                        .lineLimit(1)
+                    Text(source.host)
+                        .font(AppFont.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             Spacer(minLength: 8)
             Toggle("", isOn: Binding(
                 get: { source.isEnabled },

@@ -79,23 +79,44 @@ final class ReaderViewModel: ObservableObject {
         let fileURL = LibraryStore.shared.fileURL(for: book)
         let workDirectory = LibraryStore.shared.directory(for: book)
 
-        DispatchQueue.global(qos: .userInitiated).async {
+        Task {
+            if book.isNetworkBook, LibraryStore.shared.chapters(for: book).isEmpty {
+                await refreshChapters()
+            }
             do {
-                let document = try BookLoader.load(
-                    book: book,
-                    fileURL: fileURL,
-                    workDirectory: workDirectory,
-                    readAccessRoot: LibraryStore.shared.rootURL
-                )
-                DispatchQueue.main.async {
+                let document = try await Task.detached(priority: .userInitiated) {
+                    try BookLoader.load(
+                        book: book,
+                        fileURL: fileURL,
+                        workDirectory: workDirectory,
+                        readAccessRoot: LibraryStore.shared.rootURL
+                    )
+                }.value
+                await MainActor.run {
                     self.apply(document)
                 }
             } catch {
-                DispatchQueue.main.async {
+                await MainActor.run {
                     self.errorMessage = error.localizedDescription
                     self.isLoading = false
                 }
             }
+        }
+    }
+
+    /// 从搜索结果加入书架时没有目录，这里补拉一次。
+    private func refreshChapters() async {
+        guard let sourceID = book.sourceID,
+              let source = BookSourceStore.shared.source(id: sourceID),
+              let bookUrl = book.bookUrl else { return }
+        guard let detail = try? await BookSourceEngine.detail(
+            source: source,
+            bookUrl: bookUrl,
+            keyword: book.title,
+            fallback: nil
+        ) else { return }
+        await MainActor.run {
+            LibraryStore.shared.saveChapters(detail.chapters, for: book)
         }
     }
 

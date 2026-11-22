@@ -13,6 +13,7 @@ struct BookDetailView: View {
     @State private var downloaded = 0
     @State private var toast: String?
     @State private var openBook: Book?
+    @State private var showBrowser = false
 
     var body: some View {
         NavigationStack {
@@ -26,20 +27,23 @@ struct BookDetailView: View {
                             Spacer()
                         }
                         .padding(.top, 24)
-                    } else if let errorText = errorText {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(errorText)
-                                .font(AppFont.footnote)
-                                .foregroundStyle(.secondary)
-                            Button("重试") {
-                                Task { await loadDetail() }
-                            }
-                            .buttonStyle(.bordered)
-                        }
                     } else if let detail = detail {
                         introSection(detail)
                         actionSection(detail)
                         chapterSection(detail)
+                    } else {
+                        if let errorText = errorText {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(errorText)
+                                    .font(AppFont.footnote)
+                                    .foregroundStyle(.secondary)
+                                Button("重试") {
+                                    Task { await loadDetail() }
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        }
+                        fallbackSection
                     }
                 }
                 .padding(16)
@@ -50,6 +54,9 @@ struct BookDetailView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("关闭") { dismiss() }
                 }
+            }
+            .sheet(isPresented: $showBrowser) {
+                BrowserPreview(url: URL(string: result.bookUrl), sourceName: result.sourceName)
             }
             .task { await loadDetail() }
             .fullScreenCover(item: $openBook) { book in
@@ -256,6 +263,54 @@ struct BookDetailView: View {
                 loading = false
             }
         }
+    }
+
+    private var fallbackSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("目录或详情暂时没能解析。可以先用搜索结果加入书架，打开时会再尝试获取目录；也可以用内置浏览器直接看这个页面。")
+                .font(AppFont.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 10) {
+                Button {
+                    addFromSearchResult()
+                } label: {
+                    Label("加入书架", systemImage: "book")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button {
+                    showBrowser = true
+                } label: {
+                    Label("内置浏览器", systemImage: "safari")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+    }
+
+    private func addFromSearchResult() {
+        guard let source = BookSourceStore.shared.source(id: result.sourceID) else {
+            toast = "书源已被删除，无法加入书架"
+            return
+        }
+        let detail = SourceBookDetail(
+            source: source,
+            name: result.name,
+            author: result.author,
+            coverUrl: result.coverUrl,
+            intro: result.intro,
+            kind: result.kind,
+            lastChapter: result.lastChapter,
+            bookUrl: result.bookUrl,
+            tocUrl: result.bookUrl,
+            chapters: []
+        )
+        _ = library.addNetworkBook(detail: detail)
+        toast = "已加入书架，打开时会自动获取目录"
     }
 
     private func addAndOpen(_ detail: SourceBookDetail) {
